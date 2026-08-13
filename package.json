@@ -1,0 +1,22 @@
+{
+  "name": "juntia",
+  "version": "0.1.0",
+  "description": "Juntia: a project-local intelligence, context, and governance layer for humans and AI coding runtimes.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/junt-ia/juntia.git"
+  },
+  "main": "lib/index.js",
+  "bin": {
+    "juntia": "bin/juntia.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "templates",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  }
+}

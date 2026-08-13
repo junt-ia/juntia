@@ -24,7 +24,39 @@ The short version: **AI interprets. Juntia governs.**
 
 ## Status
 
-Early development / product bootstrap. This repository currently contains identity, documentation, and structure only — no runtime, CLI, or core library has been extracted into it yet.
+Early development / product bootstrap. A first, real core exists: a deterministic reasoning pipeline
+(product/architecture/engineering analysis, intent classification, a validated runtime-escalation bridge)
+and a minimal CLI. There is no packaged release, no runtime integration beyond a Claude Code adapter used
+internally by the bridge, and no documented stability guarantee yet — treat every export as subject to
+change until a real version is published.
+
+## Installing / using it today
+
+Not published to npm yet. To try it from a local clone:
+
+```
+git clone https://github.com/junt-ia/juntia.git
+cd juntia
+npm test        # 267/267, zero dependencies beyond Node itself
+node bin/juntia.js init   # scaffolds .juntia/ in the current directory
+```
+
+`juntia init` is the only real command today. It creates a `.juntia/` directory (`config.yml`,
+`PROJECT_STATE.md`, `DECISIONS.md`, `RULES.md`, `ARCHITECTURE.md`, `roles/*.md`) in whatever directory you
+run it from — nothing is read, analyzed, or sent anywhere, and running it again never overwrites a file
+that's already there. See [`docs/RUNTIME_INTEGRATION.md`](docs/RUNTIME_INTEGRATION.md) for why nothing
+beyond this exists yet.
+
+The reasoning core is usable programmatically:
+
+```js
+const { classifyIntent, analyzeProduct, analyzeArchitecture, analyzeEngineering, interpretIntent } = require('juntia');
+
+const intent = classifyIntent('Quiero que los clientes VIP tengan un descuento del 10%');
+```
+
+See [`lib/index.js`](lib/index.js) for the exact exported surface. This is a real, tested API, not a
+stable one yet — no version has been published, and the shape may still change.
 
 ## Where this comes from
 

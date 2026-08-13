@@ -1,0 +1,15 @@
+# Juntia project configuration.
+#
+# Nothing in this file is read by any code yet. `juntia init` scaffolds it so a
+# project has one canonical place for Juntia settings as real functionality is
+# added in a future phase, instead of that shape being invented later under time
+# pressure.
+
+schema_version: 1
+
+project:
+  name: null # fill in; not required by anything yet
+
+# Which AI coding runtimes this project integrates with (e.g. claude, codex,
+# gemini). Empty until `juntia integrate <runtime>` exists — not built yet.
+runtimes: []

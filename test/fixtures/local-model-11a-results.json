@@ -1,0 +1,318 @@
+{
+  "deterministic_normalization": [
+    {
+      "text": "Implementa un sistema de descuentos para clientes VIP.",
+      "normalizedRequest": "Quiero implementar un sistema de descuentos para clientes VIP.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 1087
+    },
+    {
+      "text": "Crea un panel de administración.",
+      "normalizedRequest": "Quiero crear un panel de administración.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 700
+    },
+    {
+      "text": "Guarda esto.",
+      "normalizedRequest": "Quiero guardar esto.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 629
+    }
+  ],
+  "genuine_paraphrase": [
+    {
+      "text": "Necesitamos que los clientes que más compran tengan alguna ventaja.",
+      "normalizedRequest": "Quiero dar ventajas a los clientes que más compran.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 820
+    },
+    {
+      "text": "Sería bueno ofrecer algo especial a los mejores clientes.",
+      "normalizedRequest": "Quiero ser bueno",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 657
+    },
+    {
+      "text": "Habría que darle algo extra a quienes compran seguido.",
+      "normalizedRequest": "Quiero darle algo extra a quienes compran seguidamente.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 777
+    },
+    {
+      "text": "Los clientes que más gastan merecen un trato diferente.",
+      "normalizedRequest": "Quiero dar un descuento a los clientes que más gastan.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 799
+    },
+    {
+      "text": "Convendría premiar a quienes nos son leales.",
+      "normalizedRequest": "Quiero convender premiar a quienes nos son leales.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 854
+    },
+    {
+      "text": "No estaría mal ofrecer condiciones especiales a los mejores compradores.",
+      "normalizedRequest": "Quiero no estaría mal ofrecer condiciones especiales a los mejores compradores.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 861
+    },
+    {
+      "text": "Podríamos pensar en algo para retener a los clientes habituales.",
+      "normalizedRequest": "Quiero pensar en algo para retener a los clientes habituales.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 837
+    }
+  ],
+  "domain_jargon": [
+    {
+      "text": "Necesitamos churn reduction para los clientes en riesgo.",
+      "normalizedRequest": "Quiero reducir el churn de los clientes en riesgo.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 779
+    },
+    {
+      "text": "El onboarding de nuevos restaurantes debería ser más rápido.",
+      "normalizedRequest": "Quiero mejorar el onboarding de nuevos restaurantes.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 745
+    }
+  ],
+  "shorthand_coreference": [
+    {
+      "text": "Igual que el otro pero para reservas.",
+      "normalizedRequest": "Quiero igualar el precio de reserva a lo del otro",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 779
+    },
+    {
+      "text": "Lo mismo de siempre.",
+      "normalizedRequest": "Quiero lo mismo de siempre.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 666
+    },
+    {
+      "text": "Vuelve a como estaba.",
+      "normalizedRequest": "Quiero volver a como estaba.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 681
+    },
+    {
+      "text": "Como en el otro proyecto.",
+      "normalizedRequest": "Quiero saber qué es lo que se quiere decir con \"como\".",
+      "confidence": "low",
+      "abstain": true,
+      "reason": "referencia no resuelta: no se sabe qué es 'lo' ni cuál 'antes'",
+      "duration_ms": 1175
+    },
+    {
+      "text": "hazlo como antes",
+      "normalizedRequest": null,
+      "confidence": "low",
+      "abstain": true,
+      "reason": "referencia no resuelta: no se sabe qué es 'lo' ni cuál 'antes'",
+      "duration_ms": 908
+    }
+  ],
+  "ambiguous": [
+    {
+      "text": "Algo pasa con las reservas.",
+      "normalizedRequest": "Quiero saber qué está pasando con las reservas.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 738
+    },
+    {
+      "text": "Mejora el sistema de pagos.",
+      "normalizedRequest": "Quiero mejorar el sistema de pagos.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 740
+    },
+    {
+      "text": "Quiero mejorar el rendimiento del checkout.",
+      "normalizedRequest": "Quiero mejorar el rendimiento del checkout.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 723
+    },
+    {
+      "text": "¿Deberíamos considerar añadir un sistema de referidos?",
+      "normalizedRequest": "Quiero considerar añadir un sistema de referidos.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 739
+    }
+  ],
+  "negative_retracted": [
+    {
+      "text": "No añadas nada, solo revisa el código.",
+      "normalizedRequest": null,
+      "confidence": "low",
+      "abstain": true,
+      "reason": "referencia no resuelta: no se sabe qué es 'lo' ni cuál 'antes'",
+      "duration_ms": 960
+    },
+    {
+      "text": "No corrijas nada, ya lo revisamos ayer y está bien.",
+      "normalizedRequest": null,
+      "confidence": "low",
+      "abstain": true,
+      "reason": "referencia no resuelta: no se sabe qué es 'lo' ni cuál 'antes'",
+      "duration_ms": 933
+    },
+    {
+      "text": "No implementes esto todavía, solo es una idea.",
+      "normalizedRequest": "Quiero no implementar esto todavía, solo es una idea.",
+      "confidence": "low",
+      "abstain": true,
+      "reason": "referencia no resuelta: no se sabe qué es 'esto' ni cuál 'implementar'",
+      "duration_ms": 1152
+    },
+    {
+      "text": "Antes queríamos multi-tenant, pero ya no lo necesitamos.",
+      "normalizedRequest": "Quiero abandonar la multi-tenencia",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 708
+    },
+    {
+      "text": "No mejores el checkout, enfócate en otra cosa.",
+      "normalizedRequest": "Quiero no mejorar el checkout",
+      "confidence": "high",
+      "abstain": true,
+      "reason": null,
+      "duration_ms": 669
+    }
+  ],
+  "false_confidence": [
+    {
+      "text": "No añadas nada, solo revisa el código.",
+      "normalizedRequest": null,
+      "confidence": "low",
+      "abstain": true,
+      "reason": "referencia no resuelta: no se sabe qué es 'lo' ni cuál 'antes'",
+      "duration_ms": 908
+    },
+    {
+      "text": "Antes queríamos multi-tenant, pero ya no lo necesitamos.",
+      "normalizedRequest": "Quiero abandonar la multi-tenencia",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 703
+    }
+  ],
+  "negative_controls": [
+    {
+      "text": "Quiero cancelar mi suscripción a este servicio.",
+      "normalizedRequest": "Quiero cancelar mi suscripción a este servicio.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 797
+    },
+    {
+      "text": "El clima está horrible para las reservas de la terraza hoy.",
+      "normalizedRequest": "Quiero saber si el clima está horrible para las reservas de la terraza hoy.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 881
+    },
+    {
+      "text": "Compré un descuento en otra tienda la semana pasada.",
+      "normalizedRequest": "Quiero comprar un descuento en otra tienda la semana pasada.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 805
+    }
+  ],
+  "formal_control": [
+    {
+      "text": "Quiero añadir clientes VIP con un descuento.",
+      "normalizedRequest": "Quiero añadir clientes VIP con un descuento.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 760
+    },
+    {
+      "text": "¿Deberíamos migrar de PostgreSQL a un almacenamiento distribuido?",
+      "normalizedRequest": "Quiero saber si deberíamos migrar de PostgreSQL a un almacenamiento distribuido.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 835
+    }
+  ],
+  "english": [
+    {
+      "text": "Let's give our loyal customers a 10% discount.",
+      "normalizedRequest": "Quiero dar un descuento del 10% a los clientes leales.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 812
+    },
+    {
+      "text": "Add multi-tenant support so each restaurant has isolated data.",
+      "normalizedRequest": "Quiero add multi-tenant support so each restaurant has isolated data.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 782
+    },
+    {
+      "text": "Fix the bug where VIP customers don't get their discount.",
+      "normalizedRequest": "Quiero fixar el problema donde los clientes de VIP no reciben su descuento.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 894
+    },
+    {
+      "text": "We need to store credit card data for recurring payments.",
+      "normalizedRequest": "Quiero almacenar datos de tarjetas de crédito para pagos recurrentes.",
+      "confidence": "high",
+      "abstain": false,
+      "reason": null,
+      "duration_ms": 938
+    }
+  ]
+}
