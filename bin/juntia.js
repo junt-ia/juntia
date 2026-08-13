@@ -8,6 +8,11 @@ const { scanProject } = require('../lib/project-intelligence/scanner.js');
 const {
   factsFromScanResult, loadFacts, saveFacts, compareFacts,
 } = require('../lib/project-intelligence/facts-store.js');
+const { interpretationId, loadPending, upsertPending, removePending } = require('../lib/project-intelligence/pending-store.js');
+const {
+  loadDecisions, recordDecision, detectConflicts, markConflicted, appendDecisionNarrative,
+} = require('../lib/project-intelligence/decisions-store.js');
+const { generateContext, writeContext } = require('../lib/project-intelligence/context-generator.js');
 
 const PACKAGE_ROOT = path.join(__dirname, '..');
 const TEMPLATES_DIR = path.join(PACKAGE_ROOT, 'templates');
@@ -204,18 +209,154 @@ async function runAnalyze(projectRoot = process.cwd(), { explain = false, adapte
     saveFacts(projectRoot, facts);
   }
 
+  // Conflict check — deterministic, runs on every analyze regardless of
+  // --explain (no AI involved): does any ACTIVE decision cite a fact this
+  // fresh scan no longer found? Never deletes or rewrites the decision
+  // (Phase 12K's own explicit requirement) — only flags it 'conflicted' and
+  // reports it once, here, when the conflict first appears. `juntia
+  // context`'s own "Conflicts needing review" section is the persistent,
+  // always-current view of every outstanding conflict.
+  const { decisions: existingDecisions } = loadDecisions(projectRoot);
+  const conflicts = detectConflicts(facts, existingDecisions);
+  if (conflicts.length > 0) {
+    markConflicted(projectRoot, conflicts);
+    console.log('');
+    console.log('Decisions needing review (evidence they were based on no longer exists — not deleted):');
+    for (const c of conflicts) console.log(`  ! "${c.decision.text}" — missing: ${c.missingFacts.join(', ')}`);
+  }
+
   if (!explain) return undefined;
 
   console.log('');
   const runtimeAdapter = adapter || require('../lib/runtime/claude-cli-adapter.js');
   const { synthesizeContext } = require('../lib/project-intelligence/context-synthesis-bridge.js');
-  const synthesis = await synthesizeContext(facts, diff, { adapter: runtimeAdapter, adapterOptions });
+  const synthesis = await synthesizeContext(facts, diff, { adapter: runtimeAdapter, adapterOptions, decisions: existingDecisions });
   console.log(formatInterpretation(synthesis));
+
+  if (synthesis.ok) {
+    const id = interpretationId(synthesis.result.basedOn);
+    const alreadyDecided = existingDecisions.find((d) => d.id === id);
+    console.log('');
+    if (alreadyDecided) {
+      console.log(`This matches an already-confirmed decision: "${alreadyDecided.text}" (confirmed ${alreadyDecided.confirmedAt.slice(0, 10)}) — nothing new to confirm.`);
+    } else {
+      const pendingId = upsertPending(projectRoot, synthesis.result);
+      console.log(`Saved as a pending interpretation (id: ${pendingId}) — run \`juntia confirm\` to confirm or reject it.`);
+    }
+  }
+
   return synthesis;
 }
 
+// Real, interactive confirmation of one pending interpretation at a time —
+// the only code path in this codebase that writes to `.juntia/decisions.json`,
+// and it only runs after a real human answers a real question. `prompt` is
+// injectable (defaults to a real `readline/promises` prompt over
+// stdin/stdout) so tests can drive it without touching a real terminal —
+// same dependency-injection pattern `runAnalyze` already uses for the
+// runtime adapter.
+async function defaultPrompt(question) {
+  const readline = require('readline/promises');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await rl.question(question);
+  } finally {
+    rl.close();
+  }
+}
+
+async function runConfirm(projectRoot = process.cwd(), { prompt = defaultPrompt } = {}) {
+  const pending = loadPending(projectRoot);
+  if (pending.unknown) {
+    console.log(`.juntia/pending.json could not be used (${pending.reason}) — nothing to confirm.`);
+    return { confirmed: [], rejected: [], stale: [] };
+  }
+  if (pending.items.length === 0) {
+    console.log('No pending interpretations to confirm.');
+    return { confirmed: [], rejected: [], stale: [] };
+  }
+
+  const factsDoc = loadFacts(projectRoot);
+  const facts = (factsDoc.exists && !factsDoc.unknown) ? factsDoc.document.facts : [];
+  const factKeys = new Set(facts.map((f) => `${f.category}:${f.name}`));
+
+  const confirmed = [];
+  const rejected = [];
+  const stale = [];
+
+  for (const item of pending.items) {
+    // Re-validated against the CURRENT facts, not just trusted from when the
+    // interpretation was first generated — facts can change between an
+    // `analyze --explain` and a later `confirm`. A pending item grounded in
+    // a fact that no longer exists is not asked about; it is dropped with an
+    // explanation, since confirming it would create a decision whose own
+    // cited evidence is already gone.
+    const missing = item.basedOn.filter((b) => !factKeys.has(b));
+    if (missing.length > 0) {
+      console.log('');
+      console.log(`Skipping "${item.interpretation}" — based on evidence that no longer exists (${missing.join(', ')}).`);
+      console.log('Run `juntia analyze --explain` again for a fresh interpretation.');
+      removePending(projectRoot, item.id);
+      stale.push(item.id);
+      continue;
+    }
+
+    console.log('');
+    console.log(`"${item.interpretation}"`);
+    console.log(`  confidence: ${item.confidence}`);
+    console.log(`  based on: ${item.basedOn.join(', ')}`);
+    // eslint-disable-next-line no-await-in-loop
+    const answer = (await prompt('Confirm this as a decision? [y/n] ')).trim().toLowerCase();
+
+    if (answer === 'y' || answer === 'yes') {
+      const decision = recordDecision(projectRoot, item);
+      appendDecisionNarrative(projectRoot, decision);
+      removePending(projectRoot, item.id);
+      confirmed.push(decision.id);
+      console.log('  Recorded as a decision.');
+    } else if (answer === 'n' || answer === 'no') {
+      removePending(projectRoot, item.id);
+      rejected.push(item.id);
+      console.log('  Rejected — discarded.');
+    } else {
+      console.log('  Skipped for now — still pending, ask again later with `juntia confirm`.');
+    }
+  }
+
+  const { decisions } = loadDecisions(projectRoot);
+  writeContext(projectRoot, generateContext(facts, decisions));
+  console.log('');
+  console.log('Updated .juntia/context.md.');
+
+  return { confirmed, rejected, stale };
+}
+
+// Deterministic, no AI: reassembles .juntia/context.md from whatever facts
+// and decisions currently exist. Safe to run any time, including with zero
+// facts or zero decisions yet — never fabricates a section it has no real
+// content for (see lib/project-intelligence/context-generator.js).
+function runContext(projectRoot = process.cwd()) {
+  const factsDoc = loadFacts(projectRoot);
+  const facts = (factsDoc.exists && !factsDoc.unknown) ? factsDoc.document.facts : [];
+  const { decisions } = loadDecisions(projectRoot);
+  const markdown = generateContext(facts, decisions);
+  writeContext(projectRoot, markdown);
+  console.log(markdown);
+  console.log('Written to .juntia/context.md.');
+  return markdown;
+}
+
 module.exports = {
-  init, runInit, runAnalyze, formatAnalysis, formatChanges, formatInterpretation, pkgVersion, SCAFFOLD_FILES,
+  init,
+  runInit,
+  runAnalyze,
+  runConfirm,
+  runContext,
+  formatAnalysis,
+  formatChanges,
+  formatInterpretation,
+  pkgVersion,
+  SCAFFOLD_FILES,
 };
 
 // Guarded so this file can be `require()`d by tests without triggering a
@@ -226,9 +367,13 @@ if (require.main === module) {
   else if (command === 'analyze') {
     runAnalyze(process.cwd(), { explain: process.argv.includes('--explain') })
       .catch((err) => { console.error(`analyze failed: ${err.message}`); process.exit(1); });
-  } else if (command === '--version' || command === '-v') console.log(pkgVersion());
+  } else if (command === 'confirm') {
+    runConfirm(process.cwd())
+      .catch((err) => { console.error(`confirm failed: ${err.message}`); process.exit(1); });
+  } else if (command === 'context') runContext(process.cwd());
+  else if (command === '--version' || command === '-v') console.log(pkgVersion());
   else {
-    console.error('Usage: juntia <init|analyze> [--explain]');
+    console.error('Usage: juntia <init|analyze [--explain]|confirm|context>');
     process.exit(1);
   }
 }

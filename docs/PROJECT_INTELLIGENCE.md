@@ -1,10 +1,11 @@
 # Project intelligence model
 
-What Juntia needs to know about a project to support `juntia analyze`. The **Deterministic** tier below is
-real and built (`lib/project-intelligence/`, exercised by `juntia analyze`). The **AI Assisted** tier is
-real and evaluated, not yet production-built (`juntia analyze --explain`, Phase 12J — a genuine AI-runtime
-call over real facts, printed to the console, never persisted). The **Human Decision** tier remains design
-only. See [`docs/CLI.md`](CLI.md) for `analyze`'s exact current behavior.
+What Juntia needs to know about a project to support `juntia analyze`. All three tiers below are now real
+and built: **Deterministic** (`lib/project-intelligence/`, exercised by `juntia analyze`), **AI Assisted**
+(`juntia analyze --explain`, Phase 12J/12K — a genuine AI-runtime call over real facts, now persisted to
+`.juntia/pending.json`), and **Human Decision** (`juntia confirm`, Phase 12K — the only step that can ever
+create a decision, written to `.juntia/decisions.json` + `.juntia/DECISIONS.md`). See
+[`docs/CLI.md`](CLI.md) for the exact current behavior of each command.
 
 ## Juntia does not try to understand everything
 
@@ -41,15 +42,17 @@ When two sources disagree, the conflict is reported explicitly — never resolve
 | Tier | Examples | AI required? | Status |
 |---|---|---|---|
 | **Deterministic** | Detect language, read `package.json`/lockfiles/`pyproject.toml`, list top-level folders, list declared dependencies, recognize config files | Never | **Built** — `juntia analyze` |
-| **AI Assisted** | Summarize purpose, propose architecture components, draft candidate documentation | Only when it adds real value | **Evaluated** (`analyze --explain`, Phase 12J) — real runtime calls, console-only, not yet persisted |
-| **Human Decision** | Product decisions, approving a detected pattern as a binding rule, resolving a source conflict | Never automated | Designed, not built |
+| **AI Assisted** | Summarize purpose, propose architecture components, draft candidate documentation | Only when it adds real value | **Built** (`analyze --explain`, Phase 12J/12K) — real runtime calls, persisted to `.juntia/pending.json` |
+| **Human Decision** | Product decisions, approving a detected pattern as a binding rule, resolving a source conflict | Never automated | **Built** (`juntia confirm`, Phase 12K) |
 
 Across every `.juntia/` file: **detecting and proposing content can be automated; writing it in as a
-recorded, human-authored fact never is.** `DECISIONS.md` entries in particular are never auto-generated, by
-definition. The built Deterministic tier detects, prints, **and persists** (`.juntia/facts.json`, Phase
-12I) — but that persisted file is machine-only memory, not one of the human-facing files above; see
-[`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md) for exactly where the FACT tier's own storage sits
-relative to `PROJECT_STATE.md`/`DECISIONS.md`/`RULES.md`/`ARCHITECTURE.md`.
+recorded, human-authored fact never is.** `DECISIONS.md` entries are appended only by `juntia confirm`, only
+after a real human answers "yes" — never auto-generated, by definition; the AI Assisted tier can propose
+(`pending.json`) but never write to `decisions.json`/`DECISIONS.md` itself. The built Deterministic tier
+detects, prints, **and persists** (`.juntia/facts.json`, Phase 12I) — but that persisted file is
+machine-only memory, not one of the human-facing files above; see
+[`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md) for exactly where the FACT/INTERPRETATION/DECISION
+tiers' own storage sits relative to `PROJECT_STATE.md`/`DECISIONS.md`/`RULES.md`/`ARCHITECTURE.md`.
 
 ## The Deterministic tier, concretely
 
@@ -75,11 +78,11 @@ guess.
 
 ## From facts to knowledge
 
-Turning these deterministic facts into interpreted knowledge (the AI Assisted tier above) is now real and
-evaluated, not just designed — see [`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md) for the
-FACT/INTERPRETATION/DECISION model, and its "INTERPRETATION tier, evaluated" section for what `analyze
---explain` actually does, without ever inventing a fact or silently promoting a guess into a recorded
-decision.
+Turning these deterministic facts into interpreted, then confirmed, knowledge (the AI Assisted and Human
+Decision tiers above) is now real and built end-to-end — see
+[`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md) for the full FACT → INTERPRETATION → CONFIRMATION →
+DECISION → CONTEXT model, without ever inventing a fact or silently promoting a guess into a recorded
+decision without a real human saying yes.
 
 ## Reuses an existing, already-tested contract
 

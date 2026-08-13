@@ -23,14 +23,21 @@ function writeFile(root, relativePath, content) {
   fs.writeFileSync(full, content);
 }
 
+// Restores console.log only after `fn()`'s own promise settles, not right
+// after `fn()` is called — a real bug found by actually running these tests
+// (not assumed): for an async fn, a plain try/finally restores logging
+// before the awaited work inside it (e.g. anything after `await
+// synthesizeContext(...)`) actually runs, letting real output leak to the
+// terminal during a supposedly-silent test.
 function silently(fn) {
   const originalLog = console.log;
   console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = originalLog;
+  const result = fn();
+  if (result && typeof result.then === 'function') {
+    return result.finally(() => { console.log = originalLog; });
   }
+  console.log = originalLog;
+  return result;
 }
 
 function mockAdapter(response) {
@@ -46,7 +53,14 @@ test('without --explain, runAnalyze never touches the runtime adapter and return
   assert.equal(result, undefined);
 });
 
-test('with explain: true, a valid runtime interpretation is returned and printed, still writing only .juntia/facts.json + .gitignore', async () => {
+// Phase 12K deliberately revised this guarantee: a valid interpretation is
+// now persisted to .juntia/pending.json (the lifecycle Phase 12J evaluated
+// and did not build, since no confirm/reject policy existed yet — it does
+// now, see test/pending-store.test.js and test/decisions-store.test.js).
+// What's still guaranteed, and tested below, is the narrower claim: still
+// nothing written outside `.juntia/`, and no decisions.json/context.md
+// appear until a human runs `juntia confirm`.
+test('with explain: true, a valid runtime interpretation is returned, printed, and persisted as a pending item — still writing only inside .juntia/, never a decision', async () => {
   const root = tempProject();
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.0.0' } }));
   const adapter = mockAdapter({
@@ -66,7 +80,7 @@ test('with explain: true, a valid runtime interpretation is returned and printed
   assert.equal(synthesis.result.confidence, 'medium');
 
   const juntiaContents = fs.readdirSync(path.join(root, '.juntia')).sort();
-  assert.deepEqual(juntiaContents, ['.gitignore', 'facts.json'], '--explain must never write a pending.json or any other file');
+  assert.deepEqual(juntiaContents, ['.gitignore', 'facts.json', 'pending.json'], '--explain must write only inside .juntia/, and never a decisions.json/context.md on its own');
 });
 
 test('with explain: true and a runtime/validation failure, analyze still completes normally (facts still persisted) and reports the failure, never crashes', async () => {

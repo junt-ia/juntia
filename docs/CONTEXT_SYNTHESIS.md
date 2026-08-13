@@ -1,14 +1,15 @@
 # Context synthesis
 
-How Juntia turns `analyze`'s deterministic facts into project knowledge, without inventing anything. The
-**FACT** tier is real and built (Phase 12I: `.juntia/facts.json`, persisted and diffed by `juntia analyze`).
-**INTERPRETATION** is real and evaluated (Phase 12J: `juntia analyze --explain` makes a genuine AI-runtime
-call over real facts, validated against a fact-grounding check, printed to the console — not yet persisted
-anywhere, so still evaluation-stage rather than "built" for production use). **DECISION** remains fully
-human and untouched by any of this. Full reasoning: `phases/12h-project-context-synthesis-design.md`
-(design), `phases/12i-project-facts-persistence.md` (the real FACT-tier implementation), and
-`phases/12j-context-synthesis-runtime-evaluation.md` (the real INTERPRETATION-tier evaluation) in
-`junt-ia/juntia-research` *(planned, not yet created — currently still `claude-toolkit`)*.
+How Juntia turns `analyze`'s deterministic facts into project knowledge, without inventing anything. All
+four stages are now real and built: **FACT** (Phase 12I: `.juntia/facts.json`), **INTERPRETATION** (Phase
+12J/12K: `juntia analyze --explain`, now persisted to `.juntia/pending.json` rather than console-only),
+**CONFIRMATION** (Phase 12K: `juntia confirm`, the only human-operated step, and the only thing that can
+ever create a decision), and **DECISION** (Phase 12K: `.juntia/decisions.json` + `.juntia/DECISIONS.md`).
+**CONTEXT** (Phase 12K: `.juntia/context.md`) assembles the last two into one human/agent-readable summary.
+Full reasoning: `phases/12h-project-context-synthesis-design.md` (design),
+`phases/12i-project-facts-persistence.md` (FACT), `phases/12j-context-synthesis-runtime-evaluation.md`
+(INTERPRETATION, evaluation), and `phases/12k-context-lifecycle.md` (CONFIRMATION/DECISION/CONTEXT, closing
+the full cycle) in `junt-ia/juntia-research` *(planned, not yet created — currently still `claude-toolkit`)*.
 
 ## Three tiers, never collapsed
 
@@ -17,8 +18,13 @@ human and untouched by any of this. Full reasoning: `phases/12h-project-context-
 | Example | `package.json` has a `phaser` dependency | "This looks like a Phaser game" | "This project will keep using Phaser" |
 | Who creates it | The deterministic scanner | An AI runtime, via the existing adapter interface | A human |
 | Confidence | N/A — observed or not | `high` / `medium` / `low` (the same three values `lib/runtime/validator.js` already defines) | N/A |
-| Lives in | `.juntia/facts.json` (**built**) | Console output only, via `analyze --explain` (**evaluated, Phase 12J**) — `.juntia/pending.json` considered, not built | `PROJECT_STATE.md` / `DECISIONS.md` / `RULES.md` / `ARCHITECTURE.md` |
-| Promotes automatically to the next tier? | Eligible to be cited | **Never** — writing to a decision-tier file always needs human confirmation | Terminal |
+| Lives in | `.juntia/facts.json` (**built**) | `.juntia/pending.json` (**built**, Phase 12K — Phase 12J's console-only output now also persists here) | `.juntia/decisions.json` + `.juntia/DECISIONS.md` (**built**, Phase 12K) |
+| Promotes automatically to the next tier? | Eligible to be cited | **Never** — only `juntia confirm`, answered `y` by a real human, creates a decision | Terminal — but never silently deleted either; see "Decisions and change" below |
+
+A fifth artifact, `.juntia/context.md` (**built**, Phase 12K, via `juntia context`), is not itself a tier —
+it's a read-only, regenerable *projection* of the FACT and DECISION tiers, assembled for whatever reads a
+project's context next (a human, or a future AI coding runtime). It never contains a pending, unconfirmed
+INTERPRETATION.
 
 A fact never becomes knowledge by itself. An interpretation never becomes a decision by itself. This is the
 same KNOWN/INFERRED/DECISION_REQUIRED discipline the internal reasoning engine (`lib/product-reasoning.js`,
@@ -37,15 +43,23 @@ project-interpretation-validator.js` (rejects any response trying to sneak in a 
 `confirmed`, `action`, `questions`, or `authorization` field — the same anti-hallucination discipline
 `lib/runtime/validator.js` already applies to intent interpretation, extended to this new interpretation
 type). `lib/project-intelligence/context-synthesis-bridge.js` composes all three, mirroring
-`lib/intent-runtime-bridge.js`'s own shape.
+`lib/intent-runtime-bridge.js`'s own shape. As of Phase 12K, `EXISTING CONTEXT` in the request text is real,
+not a placeholder: it lists every currently-confirmed decision's text (flagging a `conflicted` one inline)
+so the runtime can avoid re-proposing something already settled — closing a gap Phase 12J's own text left
+open (it always claimed "none persisted yet," which became false the moment `decisions.json` became real).
 
 ## When a human gets asked
 
 - A fact is detected → never asks, facts are self-evident.
 - An interpretation would be written into a decision-tier file for the first time → **always** confirm,
-  regardless of confidence.
-- An interpretation just restates an already-confirmed decision → skip asking, it'd be redundant.
-- A low-confidence or genuinely ambiguous interpretation → ask.
+  regardless of confidence — this is now real: `juntia confirm` asks exactly this question, for every
+  pending item, one at a time, and is the only code path that can ever write `.juntia/decisions.json`.
+- An interpretation matches a fact set an existing decision already covers → `analyze --explain` says so
+  ("This matches an already-confirmed decision...") and does not create a duplicate pending item — skipping
+  asking again would be redundant.
+- A pending item's cited evidence no longer exists in the current facts → `confirm` does not ask about it
+  either; it explains why and discards it, since confirming it would create a decision whose own evidence is
+  already gone. The right next step is a fresh `analyze --explain`, not a stale confirmation.
 
 ## The FACT tier, concretely (built, Phase 12I)
 
@@ -58,39 +72,122 @@ comparable value, like a dependency's version) — never an interpretation of wh
 is git-ignored by default (`.juntia/.gitignore`, created alongside it) since it's a machine-regenerated
 snapshot, not human-authored narrative like `DECISIONS.md`.
 
-## The INTERPRETATION tier, evaluated (Phase 12J)
+## The INTERPRETATION tier, built (Phase 12J design/evaluation, Phase 12K persistence)
 
 `juntia analyze --explain` (opt-in only — plain `analyze` never calls a runtime or spends anything) sends
-the real facts `.juntia/facts.json` just persisted, plus the real diff against the previous baseline, to
-the same authenticated Claude Code CLI session Phase 11C already uses for intent interpretation. Each fact
-is rendered with a bracket-delimited identifier (`- id:[dependency:phaser] value:"^3.60.0"
-evidence:package.json`) that the runtime is instructed to cite verbatim in `basedOn` — found necessary via
-a real, live run: an earlier, unbracketed rendering led a real response to cite
+the real facts `.juntia/facts.json` just persisted, the real diff against the previous baseline, and every
+currently-confirmed decision, to the same authenticated Claude Code CLI session Phase 11C already uses for
+intent interpretation. Each fact is rendered with a bracket-delimited identifier (`- id:[dependency:phaser]
+value:"^3.60.0" evidence:package.json`) that the runtime is instructed to cite verbatim in `basedOn` — found
+necessary via a real, live run in Phase 12J: an earlier, unbracketed rendering led a real response to cite
 `"dependency:phaser (value: 49)"` as if the trailing annotation were part of the identifier, which the
 validator correctly rejected. The validator's grounding check (cross-referencing every `basedOn` entry
 against the real fact list) is the one thing this domain's validator does that the intent domain's does
 not — the intent domain has a downstream governance layer to catch a fabricated citation later;
-INTERPRETATION does not yet, so this validator is the only line of defense against it, and does not defer
-the check.
+INTERPRETATION has no such layer, so this validator is the only line of defense against it, and does not
+defer the check.
 
-**Real validation, not just design**: two independent live runs (`juntia`, `app-podcaster`) plus one
-through the actual `bin/juntia.js analyze --explain` binary. All three produced a valid, fully fact-grounded
-interpretation — `app-podcaster`'s cited 30 real fact identifiers, all exactly matched, zero invented. Total
-real cost across every live call this phase (including the one that correctly failed validation before the
-bracket fix): well under $0.05. Output is printed to the console only, explicitly labeled "not a fact, not
-saved, not a decision" — no file is written beyond what plain `analyze` already writes
-(`.juntia/facts.json`, `.juntia/.gitignore`).
+A valid interpretation is now persisted to `.juntia/pending.json` (Phase 12K — Phase 12J deliberately did not
+build this, since no lifecycle policy existed yet; Phase 12K's own `confirm`/`reject` transitions are that
+policy). Its id is a deterministic hash of its own `basedOn` set, not the free-text interpretation itself —
+two live calls answering "the same question" (same evidence) refresh one pending item instead of piling up
+duplicates; a genuinely different evidence set gets a genuinely different id.
 
-## What's still missing before INTERPRETATION is more than an evaluation
+## The DECISION tier, built (Phase 12K)
 
-- **A persistence surface** — `.juntia/pending.json` or an equivalent was evaluated, not built, this phase
-  (see the "Decisiones descartadas" section of `phases/12j-context-synthesis-runtime-evaluation.md` for the
-  safety/UX/traceability/reversibility tradeoffs weighed). Without one, an interpretation is necessarily
-  ephemeral — useful to read once, but Juntia remembers nothing about it between runs.
-- **A feedback loop** — `EXISTING CONTEXT` in the request text is currently always "none persisted yet";
-  nothing yet writes a confirmed decision back into a form the next `--explain` run could cite.
-- **A noise/cost threshold** — every `--explain` run currently interprets the entire fact set from scratch;
-  there's no rule yet for when re-interpreting is worth the real cost/latency versus reusing a still-valid
-  prior read.
-- **A real confirmation UX** — "When a human gets asked" above is still a design, not a built flow; nothing
-  currently asks anything, because nothing is persisted for a human to confirm yet.
+The only code path in this codebase allowed to write `.juntia/decisions.json` is `bin/juntia.js`'s
+`runConfirm()`, and it only runs after a real "y" answer to a real, printed question — no AI code path
+imports `lib/project-intelligence/decisions-store.js` to write to it. `juntia confirm` walks every pending
+item, re-validates its `basedOn` against the *current* `facts.json` (not just trusted from when it was
+generated — facts can change between `--explain` and `confirm`), and asks. A stale item (citing a fact that
+no longer exists) is never asked about; it's explained and discarded.
+
+**What gets stored is the original interpretation text, verbatim** — never mechanically reworded from a
+hedge ("appears to be") into an unqualified claim. Rewording is itself a text-generation step nothing in
+this phase performs or the user actually authored; storing exactly the text a human said "yes" to is the
+only way the frozen `confidence`/`basedOn`/`unknowns` stay honestly attached to what was really confirmed.
+
+Two writes happen on confirmation, not one: `.juntia/decisions.json` (the structured, machine-consumable
+record) and a plain-English line appended to `.juntia/DECISIONS.md` (reusing the file `juntia init` already
+scaffolds and its existing "## Active decisions" bullet convention — not a second, competing narrative
+format). See "Where decisions live" below for why both exist, evaluated rather than assumed.
+
+## Decisions and change: never deleted, always reviewable
+
+A confirmed decision is never rewritten or deleted when the facts it cited change — `lib/project-
+intelligence/decisions-store.js`'s `detectConflicts()` runs on every `analyze` (not just `--explain`; purely
+deterministic, no AI) and flags a decision `status: 'conflicted'` when any fact in its `basedOn` is missing
+from the fresh scan. The decision's own text, evidence, and confidence stay exactly as originally recorded —
+only the status field changes. `juntia analyze` prints newly-found conflicts once, when they're first
+detected; `juntia context`'s own "Conflicts needing review" section always lists every outstanding one,
+so nothing gets buried after the one-time announcement scrolls past.
+
+## The CONTEXT tier, built (Phase 12K)
+
+`juntia context` (also run automatically at the end of `juntia confirm`) assembles `.juntia/context.md` from
+confirmed facts and confirmed decisions only — `lib/project-intelligence/context-generator.js`'s
+`generateContext(facts, decisions)` has no third parameter for a pending interpretation, so there is nothing
+to leak structurally, not just by convention. No placeholder "Constraints"/"Rules" sections are invented —
+this phase found no real, evidenced source for those yet (no decision "type" taxonomy exists), so they're
+left out entirely rather than filled with empty scaffolding.
+
+## Where decisions live: `.juntia/decisions.json` vs. `DECISIONS.md`, evaluated
+
+| | `.juntia/decisions.json` | `.juntia/DECISIONS.md` |
+|---|---|---|
+| Human-readable? | No — structured data | Yes — the format `juntia init` already scaffolds |
+| Machine-consumable? | Yes — `context.md`/conflict-detection read this | Not reliably (free text) |
+| Git-ignored? | **No** — same reasoning as `DECISIONS.md` itself: an irreversible human choice, not a regenerable snapshot | No (was already tracked before this phase) |
+| Merge conflicts | A real risk for concurrent decisions — but a *meaningful* one: two teammates confirming genuinely different decisions on the same evidence SHOULD surface as a conflict for a human to resolve, unlike `facts.json` where a conflict would be pure noise | Same real risk, same argument |
+
+Chosen: **both**, not one instead of the other — the brief's own "puede existir una separación entre
+decisiones estructuradas para máquina y documentación narrativa para humanos" evaluated concretely rather
+than assumed. `facts.json`/`pending.json` are git-ignored because they're machine-regenerated/proposed and
+re-derivable from re-running `analyze`/`explain`; `decisions.json` is not, because a human decision is not
+re-derivable — losing it to a missing commit is a real harm the other two files don't share.
+
+## CLI surface, evaluated not assumed
+
+Per the brief's own explicit "no crear comandos únicamente porque existen conceptualmente," each candidate
+command was checked against simplicity/UX/frequency/coherence before being built:
+
+- **`juntia explain` as a separate command** — rejected: `analyze --explain` (Phase 12J) already does this,
+  well-tested; a second, redundant way to do the same thing would hurt coherence, not help it.
+- **`juntia update` as one command running the whole 6-step cycle** (analyze → interpret → confirm →
+  decide → context) — rejected: it would force an interactive confirmation prompt (or a silent AI call)
+  inside what might be a scripted/CI `analyze` invocation, and would remove the human's ability to review an
+  interpretation before being asked to decide on it immediately. The 6 steps the brief describes map exactly
+  onto the three real commands (`analyze [--explain]` → `confirm` → `context`, the last auto-run by
+  `confirm` too) — composing existing, individually-scriptable commands, not one monolithic new one.
+- **`juntia confirm`/`juntia context` as real, separate commands** — built: neither exists conceptually
+  inside `analyze`, both are genuinely new capabilities (a human decision workflow; a context-assembly step),
+  and both are useful to run independently of the other two (e.g. `juntia context` to re-print the current
+  summary without re-scanning or re-confirming anything).
+
+## Real validation, not just design
+
+Phase 12J: two independent live runs (`juntia`, `app-podcaster`) plus one through the actual `bin/juntia.js
+analyze --explain` binary — all three produced a valid, fully fact-grounded interpretation.
+
+Phase 12K: a full, real, interactive cycle (`analyze --explain` → `confirm` [real stdin, real "y"] →
+`context`) run against a synthetic fixture and against `juntia` and `app-podcaster` themselves. Every
+resulting `decisions.json`/`DECISIONS.md`/`context.md` was inspected for correctness, and a real conflict
+was produced and correctly detected (removing `app-podcaster`'s `react-router-dom` dependency after
+confirming a decision that cited it) — the decision was flagged `conflicted`, never deleted. All test
+footprints were cleaned up afterward, confirmed via `git status` before/after showing zero unrelated changes.
+A real, live edge case was found and left undestroyed rather than "fixed" by loosening the validator:
+`app-podcaster`'s scoped dependency `@commitlint/cli` was once cited by a real response as
+`commitlint/cli` (the leading `@` dropped) and correctly rejected — the validator's exact-match grounding
+check did its job; a second real call cited it correctly. See `phases/12k-context-lifecycle.md`'s own
+"Riesgos" section for why this was documented rather than papered over with fuzzy matching.
+
+## What's still missing
+
+- **A noise/cost threshold** — every `--explain` run interprets the entire fact set from scratch; there's no
+  rule yet for when re-interpreting is worth the real cost/latency versus reusing a still-valid prior read.
+- **Decision "types"** — no taxonomy exists yet for what kind of decision something is (architecture vs.
+  constraint vs. convention), which is why `context.md` has no `Constraints`/`Rules` sections of its own.
+- **Conflict resolution UX** — a conflicted decision is flagged and reviewable, but nothing yet walks a human
+  through resolving it (confirming it's still true, superseding it with a new decision, or retiring it).
+- **Merge-conflict tooling** — `decisions.json`'s real, meaningful merge-conflict risk (see "Where decisions
+  live" above) has no dedicated tooling yet beyond ordinary git conflict resolution.

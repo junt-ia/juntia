@@ -54,27 +54,37 @@ npm install /path/to/juntia/juntia-juntia-0.1.0.tgz
 ## Using it
 
 ```
-npx juntia init             # scaffolds .juntia/ in the current directory
-npx juntia analyze          # inventories the current directory and remembers what it found
-npx juntia analyze --explain   # also asks an AI runtime for an interpretation (console only, evaluation-stage)
+npx juntia init                # scaffolds .juntia/ in the current directory
+npx juntia analyze             # inventories the current directory and remembers what it found
+npx juntia analyze --explain   # also asks an AI runtime for an interpretation, saved as pending
+npx juntia confirm             # you review each pending interpretation — yes becomes a decision, no discards it
+npx juntia context             # (re)builds .juntia/context.md from confirmed facts + confirmed decisions
 ```
 
-`init` and `analyze` are the only two real commands today. `init` creates a `.juntia/` directory
-(`config.yml`, `PROJECT_STATE.md`, `DECISIONS.md`, `RULES.md`, `ARCHITECTURE.md`, `roles/*.md`) in whatever
-directory you run it from — nothing is read, analyzed, or sent anywhere, and running it again never
+`init`, `analyze`, `confirm`, and `context` are the real commands today. `init` creates a `.juntia/`
+directory (`config.yml`, `PROJECT_STATE.md`, `DECISIONS.md`, `RULES.md`, `ARCHITECTURE.md`, `roles/*.md`) in
+whatever directory you run it from — nothing is read, analyzed, or sent anywhere, and running it again never
 overwrites a file that's already there. `analyze` detects languages, declared dependencies, recognized
 config files, and top-level structure — purely mechanical (no AI, no interpretation, no project "type"
 guessed) — and persists what it found to `.juntia/facts.json` (git-ignored by default): the first run
 creates that baseline, every run after that reports what's Added/Removed/Changed since last time.
 
-`--explain` (Phase 12J, opt-in only — plain `analyze` never calls an AI runtime or spends anything) sends
-those same real facts to the same authenticated Claude Code CLI session already used for intent
-interpretation, and prints its interpretation to the console — clearly labeled as non-authoritative, never
-written to a file, never a fact, never a decision. Every claim it makes must cite a real fact by an exact
-identifier; a citation that doesn't match a real fact is rejected outright, not silently trusted. See
-[`docs/CLI.md`](docs/CLI.md) for the full public command surface (`update`/`integrate` still designed, not
-built) and [`docs/PROJECT_INTELLIGENCE.md`](docs/PROJECT_INTELLIGENCE.md) for `analyze`'s exact knowledge
-model.
+`--explain` (opt-in only — plain `analyze` never calls an AI runtime or spends anything) sends those same
+real facts to the same authenticated Claude Code CLI session already used for intent interpretation, prints
+its interpretation to the console — clearly labeled as non-authoritative — and saves it as a pending item in
+`.juntia/pending.json`. Every claim it makes must cite a real fact by an exact identifier; a citation that
+doesn't match a real fact is rejected outright, not silently trusted.
+
+Nothing becomes a decision until a human says so: `juntia confirm` walks you through each pending
+interpretation and asks. Answering yes writes a real, traceable decision to `.juntia/decisions.json` and
+appends a plain-English line to `.juntia/DECISIONS.md`; answering no discards it. A confirmed decision is
+never deleted or silently rewritten by a later `analyze` — if the facts it cited change, it's flagged
+`conflicted` for you to review, not erased. `juntia context` assembles `.juntia/context.md` from confirmed
+facts and confirmed decisions only — never from something still pending.
+
+See [`docs/CLI.md`](docs/CLI.md) for the full public command surface (`update`/`integrate` still designed,
+not built) and [`docs/PROJECT_INTELLIGENCE.md`](docs/PROJECT_INTELLIGENCE.md) /
+[`docs/CONTEXT_SYNTHESIS.md`](docs/CONTEXT_SYNTHESIS.md) for the full FACT/INTERPRETATION/DECISION model.
 
 The reasoning core is usable programmatically:
 

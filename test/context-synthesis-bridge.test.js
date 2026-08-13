@@ -48,6 +48,26 @@ test('buildRequestText reports no changes plainly when the diff is empty', () =>
   assert.match(text, /No changes since the previous scan/);
 });
 
+// Phase 12K: EXISTING CONTEXT now reflects real confirmed decisions, closing
+// a real gap Phase 12J left (its own text always claimed "none persisted
+// yet", which became false the moment decisions.json became real).
+test('buildRequestText with no decisions still says none exist (unchanged default)', () => {
+  const text = buildRequestText(FACTS, EMPTY_DIFF);
+  assert.match(text, /none persisted yet/);
+});
+
+test('buildRequestText with a real confirmed decision includes it as EXISTING CONTEXT', () => {
+  const decisions = [{ id: 'x', text: 'Phaser is the main engine.', status: 'active' }];
+  const text = buildRequestText(FACTS, EMPTY_DIFF, decisions);
+  assert.match(text, /EXISTING CONTEXT:\n- Phaser is the main engine\./);
+});
+
+test('a conflicted decision is still included in EXISTING CONTEXT, but visibly flagged', () => {
+  const decisions = [{ id: 'x', text: 'Phaser is the main engine.', status: 'conflicted' }];
+  const text = buildRequestText(FACTS, EMPTY_DIFF, decisions);
+  assert.match(text, /Phaser is the main engine\. \[flagged: based on evidence that may no longer be current\]/);
+});
+
 // --- Runtime failure ------------------------------------------------------
 
 test('runtime failure (ok: false) fails to nothing, never fabricates an interpretation', async () => {
