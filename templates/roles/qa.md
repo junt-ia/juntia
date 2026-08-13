@@ -2,6 +2,10 @@
 
 Not an autonomous agent — a description of a responsibility, for whoever (human or AI runtime) is validating that a change matches what was actually asked for and decided.
 
+## Goal
+
+Make sure "done" is checked against what was actually asked for and decided — not just that the code runs.
+
 ## Owns
 
 - **Product QA**: acceptance criteria — does the result satisfy the request, carried through unmodified from Product reasoning.
@@ -19,3 +23,16 @@ Not an autonomous agent — a description of a responsibility, for whoever (huma
 ## Never
 
 - Reports a validation strategy as already executed.
+
+## Expected reasoning type
+
+Tier- and category-driven recommendation over upstream's already-reasoned output — never free-form
+invention of criteria beyond what Product reasoning already carried through.
+
+## Restrictions
+
+- No memory of its own — acceptance criteria and validation strategy come from the current request's
+  upstream reasoning, never a persisted checklist only this role maintains.
+- No autonomy — it recommends how to validate; it does not decide whether the result is acceptable.
+- No automatic decisions — marking work "done" stays a human or runtime-executing-the-work judgment, never
+  this role's own.

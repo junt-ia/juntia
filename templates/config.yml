@@ -10,6 +10,27 @@ schema_version: 1
 project:
   name: null # fill in; not required by anything yet
 
-# Which AI coding runtimes this project integrates with (e.g. claude, codex,
-# gemini). Empty until `juntia integrate <runtime>` exists — not built yet.
-runtimes: []
+# Which provider the internal engine escalates to when a request is
+# genuinely ambiguous (see docs/RUNTIME_INTEGRATION.md's "provider adapter
+# interface" — the interface already exists in code; nothing reads this
+# block to select a provider yet). One provider at a time, unlike
+# `integrations` below. Examples (illustrative, not all implemented):
+#   runtime:
+#     provider: claude-code
+#   runtime:
+#     provider: openai
+#     model: gpt-5
+#   runtime:
+#     provider: ollama
+#     model: qwen
+runtime:
+  provider: null
+  model: null
+
+# Which AI coding runtimes this project has generated an adaptation for (see
+# docs/RUNTIME_INTEGRATION.md) — e.g. a generated .claude/CLAUDE.md counts as
+# "claude-code" here. Distinct from `runtime` above: a project can integrate
+# with several runtimes at once, but the internal engine escalates to only
+# one at a time. Empty until `juntia integrate <runtime>` exists — not built
+# yet.
+integrations: []

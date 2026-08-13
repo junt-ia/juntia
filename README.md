@@ -44,8 +44,10 @@ node bin/juntia.js init   # scaffolds .juntia/ in the current directory
 `juntia init` is the only real command today. It creates a `.juntia/` directory (`config.yml`,
 `PROJECT_STATE.md`, `DECISIONS.md`, `RULES.md`, `ARCHITECTURE.md`, `roles/*.md`) in whatever directory you
 run it from — nothing is read, analyzed, or sent anywhere, and running it again never overwrites a file
-that's already there. See [`docs/RUNTIME_INTEGRATION.md`](docs/RUNTIME_INTEGRATION.md) for why nothing
-beyond this exists yet.
+that's already there. See [`docs/CLI.md`](docs/CLI.md) for the full public command surface (including
+`analyze`/`update`/`integrate`, designed but not built yet) and
+[`docs/RUNTIME_INTEGRATION.md`](docs/RUNTIME_INTEGRATION.md) for how Juntia talks to an AI runtime and why
+nothing beyond `init` exists yet.
 
 The reasoning core is usable programmatically:
 

@@ -22,4 +22,26 @@ Project
 
 Juntia is designed to be runtime-agnostic at this layer — nothing in this shape assumes a specific AI provider.
 
-This is intentionally a one-diagram document at this stage of the product. Real module boundaries, APIs, and a CLI surface are scoped in a later phase (see `junt-ia/juntia-research` for how that decision gets made), not designed here.
+## Public API vs. internal engine
+
+Inside the "Juntia" box above, there are two layers a developer should think about differently:
+
+```
+Juntia
+  |
+  ├── Public API            juntia init | analyze | update | integrate
+  |                         require('juntia') -- classifyIntent, analyzeProduct,
+  |                         analyzeArchitecture, analyzeEngineering, interpretIntent
+  |
+  └── Internal engine       intent router, product/architecture/engineering
+                             reasoning, validator, false-confidence risk signal,
+                             runtime bridge, provider adapters
+```
+
+A developer using Juntia should only ever need to think in terms of the Public API — "I want to add a
+feature," not "I need to run architecture reasoning." The internal engine decides which of its own pieces a
+request needs; none of those pieces are meant to become their own CLI command without real evidence a
+developer needs to invoke them directly. See [`docs/CLI.md`](CLI.md) for the public command definitions and
+[`docs/RUNTIME_INTEGRATION.md`](RUNTIME_INTEGRATION.md) for how the internal engine talks to an AI runtime.
+
+This is intentionally a small, low-detail document at this stage of the product. Real module boundaries, APIs, and a CLI surface are scoped in a later phase (see `junt-ia/juntia-research` for how that decision gets made), not designed here.
