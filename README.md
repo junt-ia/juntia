@@ -54,16 +54,18 @@ npm install /path/to/juntia/juntia-juntia-0.1.0.tgz
 ## Using it
 
 ```
-npx juntia init                # scaffolds .juntia/ in the current directory
-npx juntia analyze             # inventories the current directory and remembers what it found
-npx juntia analyze --explain   # also asks an AI runtime for an interpretation, saved as pending
-npx juntia confirm             # you review each pending interpretation — yes becomes a decision, no discards it
-npx juntia context             # (re)builds .juntia/context.md from confirmed facts + confirmed decisions
+npx juntia init                 # scaffolds .juntia/ in the current directory
+npx juntia analyze              # inventories the current directory and remembers what it found
+npx juntia analyze --explain    # also asks an AI runtime for an interpretation, saved as pending
+npx juntia confirm              # you review each pending interpretation — yes becomes a decision, no discards it
+npx juntia context              # (re)builds .juntia/context.md from confirmed facts + confirmed decisions
+npx juntia integrate claude-code  # generates CLAUDE.md so Claude Code reads that context automatically
 ```
 
-`init`, `analyze`, `confirm`, and `context` are the real commands today. `init` creates a `.juntia/`
-directory (`config.yml`, `PROJECT_STATE.md`, `DECISIONS.md`, `RULES.md`, `ARCHITECTURE.md`, `roles/*.md`) in
-whatever directory you run it from — nothing is read, analyzed, or sent anywhere, and running it again never
+`init`, `analyze`, `confirm`, `context`, and `integrate` are the real commands today. `init` creates a
+`.juntia/` directory (`config.yml`, `PROJECT_STATE.md`, `DECISIONS.md`, `RULES.md`, `ARCHITECTURE.md`,
+`roles/*.md`) in whatever directory you run it from — nothing is read, analyzed, or sent anywhere, and
+running it again never
 overwrites a file that's already there. `analyze` detects languages, declared dependencies, recognized
 config files, and top-level structure — purely mechanical (no AI, no interpretation, no project "type"
 guessed) — and persists what it found to `.juntia/facts.json` (git-ignored by default): the first run
@@ -82,9 +84,16 @@ never deleted or silently rewritten by a later `analyze` — if the facts it cit
 `conflicted` for you to review, not erased. `juntia context` assembles `.juntia/context.md` from confirmed
 facts and confirmed decisions only — never from something still pending.
 
-See [`docs/CLI.md`](docs/CLI.md) for the full public command surface (`update`/`integrate` still designed,
-not built) and [`docs/PROJECT_INTELLIGENCE.md`](docs/PROJECT_INTELLIGENCE.md) /
-[`docs/CONTEXT_SYNTHESIS.md`](docs/CONTEXT_SYNTHESIS.md) for the full FACT/INTERPRETATION/DECISION model.
+Juntia's context is only useful if an agent actually reads it: `juntia integrate claude-code` generates a
+short `CLAUDE.md` at your project root pointing Claude Code at `.juntia/context.md` — no copy of the content,
+no AI call, nothing sent anywhere, and it never overwrites a `CLAUDE.md` you already wrote yourself. Other
+runtimes (Codex, Gemini, Cursor) are architecturally supported but not built yet — no real evidence for their
+own conventions exists in this repo yet, so nothing was guessed at.
+
+See [`docs/CLI.md`](docs/CLI.md) for the full public command surface (`update` still designed, not built) and
+[`docs/PROJECT_INTELLIGENCE.md`](docs/PROJECT_INTELLIGENCE.md) /
+[`docs/CONTEXT_SYNTHESIS.md`](docs/CONTEXT_SYNTHESIS.md) / [`docs/RUNTIME_INTEGRATION.md`](docs/RUNTIME_INTEGRATION.md)
+for the full model.
 
 The reasoning core is usable programmatically:
 

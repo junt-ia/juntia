@@ -1,0 +1,182 @@
+'use strict';
+
+// Phase 12L — tests for lib/project-intelligence/agent-integration.js: the
+// pointer-file generator and config.yml `integrations:` bookkeeping. Real
+// fs.mkdtempSync fixtures throughout, same discipline as
+// test/facts-store.test.js and test/decisions-store.test.js.
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+const {
+  RUNTIME_PROFILES, isJuntiaGenerated, buildPointerContent,
+  parseIntegrationsBlock, withIntegration, integrateRuntime,
+} = require('../lib/project-intelligence/agent-integration.js');
+
+function tempProject() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'juntia-integration-test-'));
+}
+
+function writeFile(root, relativePath, content) {
+  const full = path.join(root, relativePath);
+  fs.mkdirSync(path.dirname(full), { recursive: true });
+  fs.writeFileSync(full, content);
+}
+
+function withRealJuntiaDir(root) {
+  writeFile(root, '.juntia/context.md', '# Project Context\n\nNo decisions confirmed yet.\n');
+  writeFile(root, '.juntia/config.yml', 'schema_version: 1\n\nruntime:\n  provider: null\n  model: null\n\nintegrations: []\n');
+}
+
+// --- parseIntegrationsBlock / withIntegration (pure text editing) -----------
+
+test('parseIntegrationsBlock reads an empty flow-style list', () => {
+  assert.deepEqual(parseIntegrationsBlock('integrations: []\n'), []);
+});
+
+test('parseIntegrationsBlock reads a flow-style list with entries', () => {
+  assert.deepEqual(parseIntegrationsBlock('integrations: [claude-code, codex]\n'), ['claude-code', 'codex']);
+});
+
+test('parseIntegrationsBlock reads a block-style list', () => {
+  assert.deepEqual(parseIntegrationsBlock('integrations:\n  - claude-code\n  - codex\n'), ['claude-code', 'codex']);
+});
+
+test('parseIntegrationsBlock returns empty for a config with no integrations key at all', () => {
+  assert.deepEqual(parseIntegrationsBlock('schema_version: 1\n'), []);
+});
+
+test('withIntegration adds a first entry, converting empty flow style to block style', () => {
+  const result = withIntegration('project:\n  name: null\n\nintegrations: []\n', 'claude-code');
+  assert.match(result, /integrations:\n {2}- claude-code\n/);
+  assert.doesNotMatch(result, /integrations: \[\]/);
+});
+
+test('withIntegration is idempotent — adding the same runtime twice changes nothing', () => {
+  const once = withIntegration('integrations: []\n', 'claude-code');
+  const twice = withIntegration(once, 'claude-code');
+  assert.equal(once, twice);
+});
+
+test('withIntegration appends a second entry without disturbing the first', () => {
+  const once = withIntegration('integrations: []\n', 'claude-code');
+  const twice = withIntegration(once, 'codex');
+  assert.deepEqual(parseIntegrationsBlock(twice), ['claude-code', 'codex']);
+});
+
+test('withIntegration preserves the rest of the file untouched', () => {
+  const configText = 'schema_version: 1\n\nproject:\n  name: my-app\n\nintegrations: []\n';
+  const result = withIntegration(configText, 'claude-code');
+  assert.match(result, /schema_version: 1/);
+  assert.match(result, /name: my-app/);
+});
+
+// --- generated-file marker ---------------------------------------------------
+
+test('a freshly generated pointer file is recognized as Juntia-generated', () => {
+  const content = buildPointerContent(RUNTIME_PROFILES['claude-code'], 'claude-code');
+  assert.equal(isJuntiaGenerated(content), true);
+});
+
+test('a real, human-authored file (no marker) is never mistaken for Juntia-generated', () => {
+  assert.equal(isJuntiaGenerated('# My real CLAUDE.md\n\nOur team conventions...\n'), false);
+});
+
+// --- integrateRuntime: the full, real function ------------------------------
+
+test('an unsupported runtime is refused with a clear, actionable reason — nothing is written', () => {
+  const root = tempProject();
+  withRealJuntiaDir(root);
+  const result = integrateRuntime(root, 'not-a-real-runtime');
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /unsupported runtime/);
+  assert.equal(fs.existsSync(path.join(root, 'CLAUDE.md')), false);
+});
+
+test('integrating before any real context exists is refused, not silently scaffolded', () => {
+  const root = tempProject();
+  const result = integrateRuntime(root, 'claude-code');
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /no \.juntia\/context\.md yet/);
+});
+
+test('a successful integration creates CLAUDE.md at the project ROOT, not inside .juntia/', () => {
+  const root = tempProject();
+  withRealJuntiaDir(root);
+  const result = integrateRuntime(root, 'claude-code');
+  assert.equal(result.ok, true);
+  assert.equal(result.file, 'CLAUDE.md');
+  assert.ok(fs.existsSync(path.join(root, 'CLAUDE.md')));
+});
+
+test('CLAUDE.md points to .juntia/context.md and never duplicates its content', () => {
+  const root = tempProject();
+  withRealJuntiaDir(root);
+  integrateRuntime(root, 'claude-code');
+  const content = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+  assert.match(content, /\.juntia\/context\.md/);
+  assert.doesNotMatch(content, /No decisions confirmed yet/, 'must not copy context.md\'s own content');
+});
+
+test('a pre-existing, real (non-generated) CLAUDE.md is never overwritten', () => {
+  const root = tempProject();
+  withRealJuntiaDir(root);
+  writeFile(root, 'CLAUDE.md', '# Our real team conventions\n\nDo not touch.\n');
+
+  const result = integrateRuntime(root, 'claude-code');
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /already exists and wasn't generated by Juntia/);
+  assert.equal(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), '# Our real team conventions\n\nDo not touch.\n');
+});
+
+test('re-running integrate safely regenerates a Juntia-generated CLAUDE.md', () => {
+  const root = tempProject();
+  withRealJuntiaDir(root);
+  integrateRuntime(root, 'claude-code');
+  const firstRun = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+
+  const result = integrateRuntime(root, 'claude-code');
+
+  assert.equal(result.ok, true);
+  const secondRun = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+  assert.equal(firstRun, secondRun);
+});
+
+test('a successful integration records the runtime in .juntia/config.yml, once', () => {
+  const root = tempProject();
+  withRealJuntiaDir(root);
+  integrateRuntime(root, 'claude-code');
+  integrateRuntime(root, 'claude-code');
+
+  const configText = fs.readFileSync(path.join(root, '.juntia', 'config.yml'), 'utf8');
+  assert.deepEqual(parseIntegrationsBlock(configText), ['claude-code']);
+});
+
+test('integrateRuntime never touches facts.json, decisions.json, pending.json, or context.md itself', () => {
+  const root = tempProject();
+  withRealJuntiaDir(root);
+  writeFile(root, '.juntia/facts.json', '{"schemaVersion":1,"scannedAt":"x","facts":[]}');
+  writeFile(root, '.juntia/decisions.json', '{"schemaVersion":1,"decisions":[]}');
+  const before = {
+    facts: fs.readFileSync(path.join(root, '.juntia', 'facts.json'), 'utf8'),
+    decisions: fs.readFileSync(path.join(root, '.juntia', 'decisions.json'), 'utf8'),
+    context: fs.readFileSync(path.join(root, '.juntia', 'context.md'), 'utf8'),
+  };
+
+  integrateRuntime(root, 'claude-code');
+
+  assert.equal(fs.readFileSync(path.join(root, '.juntia', 'facts.json'), 'utf8'), before.facts);
+  assert.equal(fs.readFileSync(path.join(root, '.juntia', 'decisions.json'), 'utf8'), before.decisions);
+  assert.equal(fs.readFileSync(path.join(root, '.juntia', 'context.md'), 'utf8'), before.context);
+});
+
+test('works with runtime.provider left at null — integrate never reads or requires it', () => {
+  const root = tempProject();
+  withRealJuntiaDir(root); // config.yml has runtime.provider: null
+  const result = integrateRuntime(root, 'claude-code');
+  assert.equal(result.ok, true);
+});

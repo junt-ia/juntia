@@ -13,28 +13,41 @@ using Juntia should never need to invoke one of those directly. See
 | `juntia confirm` | Walks through every pending interpretation and asks a real yes/no question. Yes writes a real decision (`.juntia/decisions.json` + a plain-English line appended to `.juntia/DECISIONS.md`) and refreshes `.juntia/context.md`; no discards it. Never runs without a human present to answer. See [`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md#the-decision-tier-built-phase-12k) for the full contract. | **Built** (Phase 12K) | No — asks a human, never the runtime. |
 | `juntia context` | Rebuilds and prints `.juntia/context.md` from confirmed facts and confirmed decisions only — safe to run any time, including with nothing confirmed yet. | **Built** (Phase 12K) | Never — purely mechanical assembly of already-confirmed data. |
 | `juntia update` | Update Juntia's own scaffolded files in a project without destroying real project content the developer has since edited. | **Designed, not built** | Never — same class of operation as `init`, mechanical file sync. |
-| `juntia integrate <runtime>` | Connect a specific AI coding runtime (Claude Code, Codex, Gemini, ...) — configure it and generate its runtime-specific adaptation of `.juntia/`. | **Designed, not built** | Never for the mechanical file-generation part; the runtime itself does no interpretation as part of being integrated. |
+| `juntia integrate <runtime>` | Generate a small, runtime-specific pointer file (e.g. `CLAUDE.md` for `claude-code`) at the path that runtime already reads on its own, so it finds `.juntia/context.md` without being told. Records the integration in `.juntia/config.yml`. | **Built** (Phase 12L) — `claude-code` only; others documented, not implemented | Never — no AI call, nothing sent anywhere; pure, deterministic file generation. |
 
 No command beyond these six exists or is planned without new evidence. In particular: no command exposes
 `classifyIntent`/`analyzeProduct`/`analyzeArchitecture`/`analyzeEngineering`/`interpretIntent` directly —
 those are the internal engine's own functions, reachable programmatically via `require('juntia')` for a
-caller that genuinely needs them (e.g. a runtime integration built later), not meant to be typed by a
-developer at a terminal. A separate `juntia explain` command and a monolithic `juntia update` that runs the
-whole cycle in one step were both evaluated and deliberately not built — see
+caller that genuinely needs them, not meant to be typed by a developer at a terminal. A separate `juntia
+explain` command and a monolithic `juntia update` that runs the whole cycle in one step were both evaluated
+and deliberately not built — see
 [`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md#cli-surface-evaluated-not-assumed) for why.
 
-## The full cycle: analyze → explain → confirm → context
+## The full cycle: analyze → explain → confirm → context → integrate
 
 ```
 juntia analyze              # facts.json created/updated; conflicts against existing decisions flagged
 juntia analyze --explain    # + one AI interpretation, saved to pending.json — nothing decided yet
 juntia confirm              # you answer yes/no for each pending item — only this step can create a decision
 juntia context               # (implicitly refreshed by confirm too) — the human/agent-readable summary
+juntia integrate claude-code # generates CLAUDE.md, pointing your agent at .juntia/context.md
 ```
 
 Every step before `confirm` is safe to run non-interactively (CI, a script) — `analyze` and `analyze
 --explain` never block waiting for input. `confirm` is the only interactive step, and the only one that can
-ever write to `.juntia/decisions.json`.
+ever write to `.juntia/decisions.json`. `integrate` is safe to run any time after `context` exists (even
+with zero decisions confirmed yet) and is always idempotent.
+
+## `integrate`: the context-consumption layer
+
+See [`docs/RUNTIME_INTEGRATION.md`](RUNTIME_INTEGRATION.md#a-real-integration-claude-code-phase-12l) for the
+full contract. In short: `juntia integrate claude-code` writes `CLAUDE.md` at the project root — never inside
+`.juntia/`, because that's genuinely where Claude Code looks — containing a short pointer to
+`.juntia/context.md`, never a copy of its content. The file starts with an invisible marker so a later
+`integrate` run can tell "safe to regenerate" apart from "a real file a human already wrote"; if a
+non-Juntia-generated file is already there, `integrate` refuses and explains rather than overwriting it.
+Never modifies source code, facts, decisions, or `context.md` itself; never calls an AI runtime or sends
+anything to an external service.
 
 ## What `analyze` does and doesn't do
 
@@ -61,14 +74,11 @@ deliberately does **not**:
 - re-queue something that already has an active, confirmed decision for the same evidence (it says so
   instead: "This matches an already-confirmed decision...").
 
-## Why `update`/`integrate` aren't built yet
+## Why `update` isn't built yet
 
-- **`update`** needs a real conflict-resolution rule (what happens when a scaffolded file has since been
-  edited by a developer) — `init`'s own "never overwrite" rule is deliberately too conservative to reuse
-  as-is for updating stale scaffolding.
-- **`integrate`** needs at least one real runtime-adaptation format actually worked out end-to-end (what
-  exactly goes in a generated `.claude/CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`, and how it stays
-  regeneratable without clobbering real edits) — nothing in this repository has attempted that yet.
-
-Building either now, without that evidence, would repeat the exact "speculative scaffolding"
-`junt-ia/juntia-research` rejected independently in every phase since its own Phase 03.
+**`update`** needs a real conflict-resolution rule (what happens when a scaffolded file has since been
+edited by a developer) — `init`'s own "never overwrite" rule is deliberately too conservative to reuse as-is
+for updating stale scaffolding. No evidence yet dictates the right rule, so it isn't built — building it now
+would repeat the exact "speculative scaffolding" `junt-ia/juntia-research` rejected independently in every
+phase since its own Phase 03. (`integrate` faced the same kind of gap until Phase 12L found real,
+first-party evidence for one runtime's convention — see `docs/RUNTIME_INTEGRATION.md`.)

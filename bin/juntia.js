@@ -13,6 +13,7 @@ const {
   loadDecisions, recordDecision, detectConflicts, markConflicted, appendDecisionNarrative,
 } = require('../lib/project-intelligence/decisions-store.js');
 const { generateContext, writeContext } = require('../lib/project-intelligence/context-generator.js');
+const { integrateRuntime, RUNTIME_PROFILES } = require('../lib/project-intelligence/agent-integration.js');
 
 const PACKAGE_ROOT = path.join(__dirname, '..');
 const TEMPLATES_DIR = path.join(PACKAGE_ROOT, 'templates');
@@ -346,12 +347,39 @@ function runContext(projectRoot = process.cwd()) {
   return markdown;
 }
 
+// Generates (or refreshes) a runtime-specific pointer file at the
+// conventional path that runtime already reads on its own — never a copy
+// of context.md's content, never a second source of truth (see
+// lib/project-intelligence/agent-integration.js). `init()` runs first,
+// idempotently, so `.juntia/config.yml` exists to record the integration
+// even on a project that never explicitly ran `juntia init`.
+function runIntegrate(runtimeName, projectRoot = process.cwd()) {
+  if (!runtimeName) {
+    console.log(`Usage: juntia integrate <runtime> — supported: ${Object.keys(RUNTIME_PROFILES).join(', ')}`);
+    return { ok: false, reason: 'no runtime specified' };
+  }
+
+  init(projectRoot);
+  const result = integrateRuntime(projectRoot, runtimeName);
+
+  if (!result.ok) {
+    console.log(`Could not integrate: ${result.reason}`);
+    return result;
+  }
+
+  console.log(`Created/updated ${result.file}${result.configUpdated ? ' and .juntia/config.yml' : ''}.`);
+  console.log(`${result.file} points to .juntia/context.md — nothing was copied, nothing was sent anywhere.`);
+  console.log(`Safe to delete and regenerate any time with \`juntia integrate ${runtimeName}\`; never hand-edit it.`);
+  return result;
+}
+
 module.exports = {
   init,
   runInit,
   runAnalyze,
   runConfirm,
   runContext,
+  runIntegrate,
   formatAnalysis,
   formatChanges,
   formatInterpretation,
@@ -371,9 +399,10 @@ if (require.main === module) {
     runConfirm(process.cwd())
       .catch((err) => { console.error(`confirm failed: ${err.message}`); process.exit(1); });
   } else if (command === 'context') runContext(process.cwd());
+  else if (command === 'integrate') runIntegrate(process.argv[3]);
   else if (command === '--version' || command === '-v') console.log(pkgVersion());
   else {
-    console.error('Usage: juntia <init|analyze [--explain]|confirm|context>');
+    console.error('Usage: juntia <init|analyze [--explain]|confirm|context|integrate <runtime>>');
     process.exit(1);
   }
 }
