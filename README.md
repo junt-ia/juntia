@@ -55,7 +55,7 @@ npm install /path/to/juntia/juntia-juntia-0.1.0.tgz
 
 ```
 npx juntia init      # scaffolds .juntia/ in the current directory
-npx juntia analyze   # prints a deterministic inventory of the current directory
+npx juntia analyze   # inventories the current directory and remembers what it found
 ```
 
 `init` and `analyze` are the only two real commands today. `init` creates a `.juntia/` directory
@@ -63,9 +63,11 @@ npx juntia analyze   # prints a deterministic inventory of the current directory
 directory you run it from — nothing is read, analyzed, or sent anywhere, and running it again never
 overwrites a file that's already there. `analyze` detects languages, declared dependencies, recognized
 config files, and top-level structure — purely mechanical (no AI, no interpretation, no project "type"
-guessed) and read-only (nothing is written to `.juntia/` yet). See [`docs/CLI.md`](docs/CLI.md) for the full
-public command surface (`update`/`integrate` still designed, not built) and
-[`docs/PROJECT_INTELLIGENCE.md`](docs/PROJECT_INTELLIGENCE.md) for `analyze`'s exact knowledge model.
+guessed) — and persists what it found to `.juntia/facts.json` (git-ignored by default): the first run
+creates that baseline, every run after that reports what's Added/Removed/Changed since last time. See
+[`docs/CLI.md`](docs/CLI.md) for the full public command surface (`update`/`integrate` still designed, not
+built) and [`docs/PROJECT_INTELLIGENCE.md`](docs/PROJECT_INTELLIGENCE.md) for `analyze`'s exact knowledge
+model.
 
 The reasoning core is usable programmatically:
 

@@ -44,8 +44,11 @@ When two sources disagree, the conflict is reported explicitly — never resolve
 | **Human Decision** | Product decisions, approving a detected pattern as a binding rule, resolving a source conflict | Never automated | Designed, not built |
 
 Across every `.juntia/` file: **detecting and proposing content can be automated; writing it in as a
-recorded fact never is.** `DECISIONS.md` entries in particular are never auto-generated, by definition. The
-built Deterministic tier only ever detects and prints — it does not yet write anything into `.juntia/`.
+recorded, human-authored fact never is.** `DECISIONS.md` entries in particular are never auto-generated, by
+definition. The built Deterministic tier detects, prints, **and persists** (`.juntia/facts.json`, Phase
+12I) — but that persisted file is machine-only memory, not one of the human-facing files above; see
+[`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md) for exactly where the FACT tier's own storage sits
+relative to `PROJECT_STATE.md`/`DECISIONS.md`/`RULES.md`/`ARCHITECTURE.md`.
 
 ## The Deterministic tier, concretely
 

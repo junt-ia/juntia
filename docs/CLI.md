@@ -8,7 +8,7 @@ using Juntia should never need to invoke one of those directly. See
 | Command | Responsibility | Status | Consumes AI? |
 |---|---|---|---|
 | `juntia init` | Create a project-local `.juntia/` context directory (config, state, decisions, rules, architecture, roles). | **Built** | Never — pure, deterministic filesystem scaffolding. |
-| `juntia analyze` | Print a deterministic inventory of an existing project — languages, declared dependencies, recognized config files, top-level structure, each traceable to real evidence. See [`docs/PROJECT_INTELLIGENCE.md`](PROJECT_INTELLIGENCE.md) for the full knowledge model. | **Built — inventory only** | Never. This is the Deterministic tier only; it prints facts and never writes `.juntia/` content, surfaces unknowns, or interprets what it finds (no project "type" is ever reported). |
+| `juntia analyze` | Print a deterministic inventory of an existing project — languages, declared dependencies, recognized config files, top-level structure, each traceable to real evidence — and persist it as a factual baseline (`.juntia/facts.json`), reporting Added/Removed/Changed against the previous baseline on every run after the first. See [`docs/PROJECT_INTELLIGENCE.md`](PROJECT_INTELLIGENCE.md) for the full knowledge model. | **Built — inventory + factual memory** | Never. Still the Deterministic tier only; it persists and diffs facts, never interprets what a change means (no project "type" is ever reported). |
 | `juntia update` | Update Juntia's own scaffolded files in a project without destroying real project content the developer has since edited. | **Designed, not built** | Never — same class of operation as `init`, mechanical file sync. |
 | `juntia integrate <runtime>` | Connect a specific AI coding runtime (Claude Code, Codex, Gemini, ...) — configure it and generate its runtime-specific adaptation of `.juntia/`. | **Designed, not built** | Never for the mechanical file-generation part; the runtime itself does no interpretation as part of being integrated. |
 
@@ -20,19 +20,24 @@ developer at a terminal.
 
 ## What `analyze` does and doesn't do yet
 
-`analyze` today is exactly the Deterministic tier of [`docs/PROJECT_INTELLIGENCE.md`](PROJECT_INTELLIGENCE.md)
-— language/dependency/config/structure detection, printed to the terminal, nothing written anywhere. It
-deliberately does **not** yet:
+`analyze` today is the Deterministic tier of [`docs/PROJECT_INTELLIGENCE.md`](PROJECT_INTELLIGENCE.md) plus
+factual memory (Phase 12I): language/dependency/config/structure detection, printed to the terminal, and
+persisted to `.juntia/facts.json` (git-ignored by default via a scoped `.juntia/.gitignore` this command
+also creates). First run creates the baseline; every run after that compares against it and reports
+Added/Removed/Changed, then updates the baseline. It deliberately does **not** yet:
 
-- write anything into `.juntia/` (no `PROJECT_STATE.md`/`ARCHITECTURE.md` seeding);
+- write anything into the *human-facing* `.juntia/` files (no `PROJECT_STATE.md`/`ARCHITECTURE.md`
+  seeding — `facts.json` is a separate, machine-only file, per
+  [`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md)'s FACT/INTERPRETATION/DECISION tiering);
 - surface unknowns or ask questions;
 - call an AI runtime, summarize purpose, or propose architecture components;
-- report a project "type" (finding a `phaser` dependency is reported as exactly that — a dependency — never
-  as "this is a game").
+- report a project "type," or interpret a change (a dependency removal is reported as exactly that — never
+  as "the project got simpler" or any other reading of what it means).
 
 That AI-assisted layer needs its own prompt design, a noise threshold for what's worth surfacing, and a
-confirmation UX — none of which exist yet or were in scope for the phase that built the deterministic layer
-(`phases/12e-deterministic-project-intelligence.md` in the research repo).
+confirmation UX — none of which exist yet. See `phases/12e-deterministic-project-intelligence.md`,
+`phases/12h-project-context-synthesis-design.md`, and `phases/12i-project-facts-persistence.md` in the
+research repo for the full history.
 
 ## Why `update`/`integrate` aren't built yet
 

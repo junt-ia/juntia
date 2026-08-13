@@ -5,6 +5,9 @@ const fs = require('fs');
 const path = require('path');
 
 const { scanProject } = require('../lib/project-intelligence/scanner.js');
+const {
+  factsFromScanResult, loadFacts, saveFacts, compareFacts,
+} = require('../lib/project-intelligence/facts-store.js');
 
 const PACKAGE_ROOT = path.join(__dirname, '..');
 const TEMPLATES_DIR = path.join(PACKAGE_ROOT, 'templates');
@@ -69,8 +72,7 @@ function runInit(projectRoot = process.cwd()) {
 
 // Formats scanProject()'s real output as a plain inventory listing — no
 // interpretation added here either; this only decides how to print facts
-// the scanner already found. Never writes a file (Phase 12E's own explicit
-// restriction: analyze is inventory-only, it does not touch .juntia/ yet).
+// the scanner already found.
 function formatAnalysis(result) {
   const lines = ['Analyzing project...', '', 'Detected:', ''];
 
@@ -103,15 +105,73 @@ function formatAnalysis(result) {
     lines.push('');
   }
 
-  lines.push('This is a mechanical inventory only: no AI was used, no project type was guessed, and nothing was written to .juntia/.');
+  lines.push('This is a mechanical inventory only: no AI was used, and no project type was guessed.');
   return lines.join('\n');
 }
 
-function runAnalyze(projectRoot = process.cwd()) {
-  console.log(formatAnalysis(scanProject(projectRoot)));
+// Formats a compareFacts() diff as a plain, fact-level change report — never
+// an interpretation of what a change means (Phase 12H/12I's own boundary:
+// "dependency phaser removed" is reportable, "the project stopped being a
+// game" is not, and this function has no way to produce the latter since it
+// only ever prints category/name/value fields compareFacts() itself
+// computed).
+function formatChanges({ added, removed, changed }) {
+  if (added.length === 0 && removed.length === 0 && changed.length === 0) {
+    return 'No changes detected since the last analyze.';
+  }
+  const lines = ['Changes detected:', ''];
+  if (added.length > 0) {
+    lines.push('Added:');
+    for (const fact of added) lines.push(`  + ${fact.category}: ${fact.name}`);
+    lines.push('');
+  }
+  if (removed.length > 0) {
+    lines.push('Removed:');
+    for (const fact of removed) lines.push(`  - ${fact.category}: ${fact.name}`);
+    lines.push('');
+  }
+  if (changed.length > 0) {
+    lines.push('Changed:');
+    for (const c of changed) lines.push(`  ~ ${c.category}: ${c.name} ${JSON.stringify(c.from)} -> ${JSON.stringify(c.to)}`);
+    lines.push('');
+  }
+  return lines.join('\n');
 }
 
-module.exports = { init, runInit, runAnalyze, formatAnalysis, pkgVersion, SCAFFOLD_FILES };
+// scan -> facts -> persist -> compare -> report, per this phase's own design.
+// First run: no previous baseline, creates one. Later runs: compares against
+// the previous baseline, reports the diff, then updates the baseline for
+// next time. A corrupt or schema-incompatible facts.json is reported as
+// UNKNOWN and treated as a fresh baseline — never guessed at, never crashes.
+// The only file this writes is .juntia/facts.json (and, once, .juntia/.gitignore)
+// — verified by test (test/facts-store.test.js, test/cli-analyze.test.js).
+function runAnalyze(projectRoot = process.cwd()) {
+  const result = scanProject(projectRoot);
+  console.log(formatAnalysis(result));
+  console.log('');
+
+  const facts = factsFromScanResult(result);
+  const previous = loadFacts(projectRoot);
+
+  if (!previous.exists) {
+    saveFacts(projectRoot, facts);
+    console.log(`Created a factual baseline at .juntia/facts.json (${facts.length} facts). Run analyze again later to see what changed.`);
+    return;
+  }
+
+  if (previous.unknown) {
+    console.log(`Previous .juntia/facts.json could not be used (${previous.reason}) — treating this as a fresh baseline.`);
+    saveFacts(projectRoot, facts);
+    return;
+  }
+
+  console.log(formatChanges(compareFacts(previous.document.facts, facts)));
+  saveFacts(projectRoot, facts);
+}
+
+module.exports = {
+  init, runInit, runAnalyze, formatAnalysis, formatChanges, pkgVersion, SCAFFOLD_FILES,
+};
 
 // Guarded so this file can be `require()`d by tests without triggering a
 // command as a side effect (same convention as claude-toolkit's own bin/claude-toolkit.js).
