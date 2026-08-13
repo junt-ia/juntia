@@ -22,6 +22,10 @@ Zero dependencies beyond Node's own `node:test`/`node:assert`/`node:child_proces
   guessed default. See any of their test files for the pattern.
 - `lib/runtime/` is the only part of the codebase allowed to know about a specific AI provider
   (`claude-cli-adapter.js`); nothing else should import a vendor-specific detail directly.
+- Only `lib/index.js`'s exports are public. `package.json`'s `exports` map enforces this at the package
+  level (a deep `require('@juntia/juntia/lib/...')` from outside the package fails) — adding a new
+  internal module never requires touching that map; adding a new *public* function does, deliberately, so
+  it can't happen by accident.
 
 ## Questions about direction
 

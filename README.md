@@ -25,21 +25,37 @@ The short version: **AI interprets. Juntia governs.**
 ## Status
 
 Early development / product bootstrap. A first, real core exists: a deterministic reasoning pipeline
-(product/architecture/engineering analysis, intent classification, a validated runtime-escalation bridge)
-and a minimal CLI. There is no packaged release, no runtime integration beyond a Claude Code adapter used
-internally by the bridge, and no documented stability guarantee yet — treat every export as subject to
-change until a real version is published.
+(product/architecture/engineering analysis, intent classification, a validated runtime-escalation bridge),
+a deterministic project-inventory layer, and a real, installable package — verified end-to-end from a real
+external project, not just this repository's own tests. There is no npm release yet, no runtime integration
+beyond a Claude Code adapter used internally by the bridge, and no documented stability guarantee — treat
+every export as subject to change before a real `1.0.0`.
 
-## Installing / using it today
+## Installing
 
-Not published to npm yet. To try it from a local clone:
+Package name: **`@juntia/juntia`**. Not published to npm yet (this is still early development). Once
+published, installation will be:
+
+```
+npm install @juntia/juntia
+```
+
+Until then, install directly from a local clone — this is the exact mechanism verified against a real,
+external project during this phase, not just described:
 
 ```
 git clone https://github.com/junt-ia/juntia.git
 cd juntia
-npm test        # 278/278, zero dependencies beyond Node itself
-node bin/juntia.js init      # scaffolds .juntia/ in the current directory
-node bin/juntia.js analyze   # prints a deterministic inventory of the current directory
+npm pack                                   # builds @juntia/juntia-0.1.0.tgz
+cd /path/to/your/project
+npm install /path/to/juntia/juntia-juntia-0.1.0.tgz
+```
+
+## Using it
+
+```
+npx juntia init      # scaffolds .juntia/ in the current directory
+npx juntia analyze   # prints a deterministic inventory of the current directory
 ```
 
 `init` and `analyze` are the only two real commands today. `init` creates a `.juntia/` directory
@@ -54,13 +70,15 @@ public command surface (`update`/`integrate` still designed, not built) and
 The reasoning core is usable programmatically:
 
 ```js
-const { classifyIntent, analyzeProduct, analyzeArchitecture, analyzeEngineering, interpretIntent } = require('juntia');
+const { classifyIntent, analyzeProduct, analyzeArchitecture, analyzeEngineering, interpretIntent } = require('@juntia/juntia');
 
 const intent = classifyIntent('Quiero que los clientes VIP tengan un descuento del 10%');
 ```
 
-See [`lib/index.js`](lib/index.js) for the exact exported surface. This is a real, tested API, not a
-stable one yet — no version has been published, and the shape may still change.
+Only this documented surface is importable — `require('@juntia/juntia/lib/...')` (any internal module) is
+blocked by the package's own `exports` map, not just by convention. See [`lib/index.js`](lib/index.js) for
+the exact exported surface. This is a real, tested API, not a stable one yet — no version has been
+published, and the shape may still change.
 
 ## Where this comes from
 
