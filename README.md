@@ -54,8 +54,9 @@ npm install /path/to/juntia/juntia-juntia-0.1.0.tgz
 ## Using it
 
 ```
-npx juntia init      # scaffolds .juntia/ in the current directory
-npx juntia analyze   # inventories the current directory and remembers what it found
+npx juntia init             # scaffolds .juntia/ in the current directory
+npx juntia analyze          # inventories the current directory and remembers what it found
+npx juntia analyze --explain   # also asks an AI runtime for an interpretation (console only, evaluation-stage)
 ```
 
 `init` and `analyze` are the only two real commands today. `init` creates a `.juntia/` directory
@@ -64,7 +65,13 @@ directory you run it from — nothing is read, analyzed, or sent anywhere, and r
 overwrites a file that's already there. `analyze` detects languages, declared dependencies, recognized
 config files, and top-level structure — purely mechanical (no AI, no interpretation, no project "type"
 guessed) — and persists what it found to `.juntia/facts.json` (git-ignored by default): the first run
-creates that baseline, every run after that reports what's Added/Removed/Changed since last time. See
+creates that baseline, every run after that reports what's Added/Removed/Changed since last time.
+
+`--explain` (Phase 12J, opt-in only — plain `analyze` never calls an AI runtime or spends anything) sends
+those same real facts to the same authenticated Claude Code CLI session already used for intent
+interpretation, and prints its interpretation to the console — clearly labeled as non-authoritative, never
+written to a file, never a fact, never a decision. Every claim it makes must cite a real fact by an exact
+identifier; a citation that doesn't match a real fact is rejected outright, not silently trusted. See
 [`docs/CLI.md`](docs/CLI.md) for the full public command surface (`update`/`integrate` still designed, not
 built) and [`docs/PROJECT_INTELLIGENCE.md`](docs/PROJECT_INTELLIGENCE.md) for `analyze`'s exact knowledge
 model.

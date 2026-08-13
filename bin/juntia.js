@@ -138,6 +138,36 @@ function formatChanges({ added, removed, changed }) {
   return lines.join('\n');
 }
 
+// Prints a runtime interpretation (Phase 12J) to the console only — never
+// written to a file. This is Option A of the two output surfaces the phase
+// evaluated (the other, `.juntia/pending.json`, was deliberately not built
+// this phase; see phases/12j-context-synthesis-runtime-evaluation.md). An
+// interpretation is never mistaken for a fact: every line here is
+// explicitly labeled and clearly separated from `formatAnalysis()`'s own
+// output above it.
+function formatInterpretation(synthesis) {
+  if (!synthesis.ok) {
+    return [
+      'AI interpretation: not available.',
+      `Reason: ${synthesis.reason}`,
+      'No file was written and no interpretation was recorded — nothing here is a fact or a decision.',
+    ].join('\n');
+  }
+  const { interpretation, confidence, basedOn, unknowns } = synthesis.result;
+  const lines = [
+    'AI interpretation (not a fact, not saved, not a decision — for you to confirm or discard):',
+    '',
+    `  ${interpretation}`,
+    `  confidence: ${confidence}`,
+    `  based on: ${basedOn.join(', ')}`,
+  ];
+  if (unknowns.length > 0) {
+    lines.push('  unknowns:');
+    for (const u of unknowns) lines.push(`    - ${u.topic}: ${u.reason}`);
+  }
+  return lines.join('\n');
+}
+
 // scan -> facts -> persist -> compare -> report, per this phase's own design.
 // First run: no previous baseline, creates one. Later runs: compares against
 // the previous baseline, reports the diff, then updates the baseline for
@@ -145,7 +175,15 @@ function formatChanges({ added, removed, changed }) {
 // UNKNOWN and treated as a fresh baseline — never guessed at, never crashes.
 // The only file this writes is .juntia/facts.json (and, once, .juntia/.gitignore)
 // — verified by test (test/facts-store.test.js, test/cli-analyze.test.js).
-function runAnalyze(projectRoot = process.cwd()) {
+// `--explain` (Phase 12J) never adds a file write: it only decides whether
+// an extra, clearly-labeled console section is printed after the same
+// facts this command already computed. Without it, behavior is byte-for-
+// byte identical to before Phase 12J — a real runtime call/cost only ever
+// happens when explicitly requested.
+// Returns the runtime synthesis result when `explain` was requested
+// (undefined otherwise) — mainly so tests can await completion and inspect
+// what happened, without needing to spy on console.log.
+async function runAnalyze(projectRoot = process.cwd(), { explain = false, adapter = null, adapterOptions } = {}) {
   const result = scanProject(projectRoot);
   console.log(formatAnalysis(result));
   console.log('');
@@ -153,24 +191,31 @@ function runAnalyze(projectRoot = process.cwd()) {
   const facts = factsFromScanResult(result);
   const previous = loadFacts(projectRoot);
 
+  let diff = { added: [], removed: [], changed: [] };
   if (!previous.exists) {
     saveFacts(projectRoot, facts);
     console.log(`Created a factual baseline at .juntia/facts.json (${facts.length} facts). Run analyze again later to see what changed.`);
-    return;
-  }
-
-  if (previous.unknown) {
+  } else if (previous.unknown) {
     console.log(`Previous .juntia/facts.json could not be used (${previous.reason}) — treating this as a fresh baseline.`);
     saveFacts(projectRoot, facts);
-    return;
+  } else {
+    diff = compareFacts(previous.document.facts, facts);
+    console.log(formatChanges(diff));
+    saveFacts(projectRoot, facts);
   }
 
-  console.log(formatChanges(compareFacts(previous.document.facts, facts)));
-  saveFacts(projectRoot, facts);
+  if (!explain) return undefined;
+
+  console.log('');
+  const runtimeAdapter = adapter || require('../lib/runtime/claude-cli-adapter.js');
+  const { synthesizeContext } = require('../lib/project-intelligence/context-synthesis-bridge.js');
+  const synthesis = await synthesizeContext(facts, diff, { adapter: runtimeAdapter, adapterOptions });
+  console.log(formatInterpretation(synthesis));
+  return synthesis;
 }
 
 module.exports = {
-  init, runInit, runAnalyze, formatAnalysis, formatChanges, pkgVersion, SCAFFOLD_FILES,
+  init, runInit, runAnalyze, formatAnalysis, formatChanges, formatInterpretation, pkgVersion, SCAFFOLD_FILES,
 };
 
 // Guarded so this file can be `require()`d by tests without triggering a
@@ -178,10 +223,12 @@ module.exports = {
 if (require.main === module) {
   const command = process.argv[2];
   if (command === 'init') runInit();
-  else if (command === 'analyze') runAnalyze();
-  else if (command === '--version' || command === '-v') console.log(pkgVersion());
+  else if (command === 'analyze') {
+    runAnalyze(process.cwd(), { explain: process.argv.includes('--explain') })
+      .catch((err) => { console.error(`analyze failed: ${err.message}`); process.exit(1); });
+  } else if (command === '--version' || command === '-v') console.log(pkgVersion());
   else {
-    console.error('Usage: juntia <init|analyze>');
+    console.error('Usage: juntia <init|analyze> [--explain]');
     process.exit(1);
   }
 }

@@ -1,9 +1,10 @@
 # Project intelligence model
 
 What Juntia needs to know about a project to support `juntia analyze`. The **Deterministic** tier below is
-real and built (`lib/project-intelligence/`, exercised by `juntia analyze`) — the AI Assisted and Human
-Decision tiers remain design only, no AI call exists yet. See [`docs/CLI.md`](CLI.md) for `analyze`'s exact
-current behavior.
+real and built (`lib/project-intelligence/`, exercised by `juntia analyze`). The **AI Assisted** tier is
+real and evaluated, not yet production-built (`juntia analyze --explain`, Phase 12J — a genuine AI-runtime
+call over real facts, printed to the console, never persisted). The **Human Decision** tier remains design
+only. See [`docs/CLI.md`](CLI.md) for `analyze`'s exact current behavior.
 
 ## Juntia does not try to understand everything
 
@@ -40,7 +41,7 @@ When two sources disagree, the conflict is reported explicitly — never resolve
 | Tier | Examples | AI required? | Status |
 |---|---|---|---|
 | **Deterministic** | Detect language, read `package.json`/lockfiles/`pyproject.toml`, list top-level folders, list declared dependencies, recognize config files | Never | **Built** — `juntia analyze` |
-| **AI Assisted** | Summarize purpose, propose architecture components, draft candidate documentation | Only when it adds real value | Designed, not built |
+| **AI Assisted** | Summarize purpose, propose architecture components, draft candidate documentation | Only when it adds real value | **Evaluated** (`analyze --explain`, Phase 12J) — real runtime calls, console-only, not yet persisted |
 | **Human Decision** | Product decisions, approving a detected pattern as a binding rule, resolving a source conflict | Never automated | Designed, not built |
 
 Across every `.juntia/` file: **detecting and proposing content can be automated; writing it in as a
@@ -74,10 +75,11 @@ guess.
 
 ## From facts to knowledge
 
-Turning these deterministic facts into interpreted knowledge (the AI Assisted tier above) is designed, not
-built — see [`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md) for the FACT/INTERPRETATION/DECISION model
-that governs how that would work without ever inventing a fact or silently promoting a guess into a
-recorded decision.
+Turning these deterministic facts into interpreted knowledge (the AI Assisted tier above) is now real and
+evaluated, not just designed — see [`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md) for the
+FACT/INTERPRETATION/DECISION model, and its "INTERPRETATION tier, evaluated" section for what `analyze
+--explain` actually does, without ever inventing a fact or silently promoting a guess into a recorded
+decision.
 
 ## Reuses an existing, already-tested contract
 
