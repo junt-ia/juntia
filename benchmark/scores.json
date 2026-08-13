@@ -1,0 +1,66 @@
+{
+  "perRepo": [
+    {
+      "repo": "app-podcaster",
+      "coverage": 1,
+      "expectedTrueCount": 72,
+      "detectedTrueCount": 72,
+      "totalChecks": 90,
+      "falsePositiveCount": 0,
+      "falsePositives": [],
+      "missing": [],
+      "countMismatches": [],
+      "evidenceQuality": 1,
+      "evidenceFactCount": 49,
+      "stableAcrossThreeRuns": true
+    },
+    {
+      "repo": "claude-toolkit",
+      "coverage": 1,
+      "expectedTrueCount": 24,
+      "detectedTrueCount": 24,
+      "totalChecks": 47,
+      "falsePositiveCount": 0,
+      "falsePositives": [],
+      "missing": [],
+      "countMismatches": [],
+      "evidenceQuality": 1,
+      "evidenceFactCount": 2,
+      "stableAcrossThreeRuns": true
+    },
+    {
+      "repo": "juntia",
+      "coverage": 1,
+      "expectedTrueCount": 13,
+      "detectedTrueCount": 13,
+      "totalChecks": 37,
+      "falsePositiveCount": 0,
+      "falsePositives": [],
+      "missing": [],
+      "countMismatches": [],
+      "evidenceQuality": 1,
+      "evidenceFactCount": 1,
+      "stableAcrossThreeRuns": true
+    },
+    {
+      "repo": "restaurant-game",
+      "coverage": 1,
+      "expectedTrueCount": 25,
+      "detectedTrueCount": 25,
+      "totalChecks": 45,
+      "falsePositiveCount": 0,
+      "falsePositives": [],
+      "missing": [],
+      "countMismatches": [],
+      "evidenceQuality": 1,
+      "evidenceFactCount": 9,
+      "stableAcrossThreeRuns": true
+    }
+  ],
+  "overall": {
+    "coverage": 1,
+    "falsePositives": 0,
+    "evidenceQuality": 1,
+    "allStable": true
+  }
+}

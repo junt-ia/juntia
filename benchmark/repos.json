@@ -1,0 +1,22 @@
+{
+  "juntia": {
+    "description": "This package's own repository (Node.js, plain JavaScript, zero dependencies).",
+    "url": "https://github.com/junt-ia/juntia",
+    "visibility": "public"
+  },
+  "claude-toolkit": {
+    "description": "Juntia's own research/historical-origin repository (Node.js CLI tool, plain JavaScript).",
+    "url": "https://github.com/damldieg/claude-toolkit",
+    "visibility": "public"
+  },
+  "restaurant-game": {
+    "description": "A real Phaser + TypeScript + Vite + pnpm game project — the use case that originated Juntia.",
+    "url": "https://github.com/damldieg/restaurant-game",
+    "visibility": "private"
+  },
+  "app-podcaster": {
+    "description": "A real React + TypeScript + Vite + yarn frontend project.",
+    "url": "https://github.com/damldieg/app-podcaster",
+    "visibility": "public"
+  }
+}

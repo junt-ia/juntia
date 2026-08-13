@@ -1,0 +1,35 @@
+{
+  "repo": "app-podcaster",
+  "groundTruthMethod": "Direct inspection: package.json read in full, `ls -a` at repo root, `find` counts of *.ts/*.tsx and *.js/*.jsx (excluding node_modules/.git/.yarn/.husky) cross-checked against the real scanner output. A first independent count (2 JS files) disagreed with the tool's real result (4) — traced to a bug in the verification `find` command itself (it incorrectly pruned top-level dotfiles like `.eslintrc.js`); corrected and re-verified at 4, matching the tool exactly. See phase doc for the full account.",
+  "languages": { "TypeScript": 43, "JavaScript": 4, "Python": 0, "C#": 0, "Java": 0 },
+  "technologies": {
+    "phaser": false, "react": true, "vue": false, "svelte": false, "angular": false,
+    "vite": true, "webpack": false, "express": false, "next": false
+  },
+  "configs": {
+    "vite.config.js": false, "vite.config.ts": true, "webpack.config.js": false,
+    "tsconfig.json": true, "jest.config.js": false, "babel.config.js": false
+  },
+  "manifests": {
+    "package.json": true, "package-lock.json": false, "pnpm-lock.yaml": false,
+    "yarn.lock": true, "requirements.txt": false, "pyproject.toml": false
+  },
+  "dependencies": [
+    "axios", "date-fns", "react", "react-dom", "react-loader-spinner", "react-router-dom", "redux-persist", "styled-components",
+    "@chakra-ui/react", "@commitlint/cli", "@commitlint/config-conventional", "@damian.diego/claude-toolkit",
+    "@emotion/react", "@emotion/styled", "@reduxjs/toolkit", "@testing-library/jest-dom", "@testing-library/react",
+    "@types/react", "@types/react-dom", "@types/styled-components", "@typescript-eslint/eslint-plugin",
+    "@typescript-eslint/parser", "@vitejs/plugin-react", "commitiquette", "commitizen", "eslint",
+    "eslint-config-prettier", "eslint-import-resolver-typescript", "eslint-plugin-compat", "eslint-plugin-import",
+    "eslint-plugin-react", "eslint-plugin-storybook", "framer-motion", "husky", "jsdom", "lint-staged", "prettier",
+    "react-redux", "ts-jest", "ts-node", "tsconfig-paths", "typescript", "vite", "vitest"
+  ],
+  "structure": {
+    "directories": [".claude", ".husky", ".yarn", "public", "src"],
+    "files": [".commitlintrc.js", ".eslintrc.js", ".gitignore", ".prettierrc.json", ".yarnrc.yml", "CLAUDE.md", "Readme.md", "index.html", "lint-staged.config.js", "package.json", "tsconfig.json", "tsconfig.node.json", "vercel.json", "vite.config.ts", "yarn.lock"]
+  },
+  "knownGaps": [
+    "vite.config.ts and the vite dependency correctly collapse to one `vite` technology entry (dedup fix from Phase 12E), verified still working against a real, more complex project.",
+    "tsconfig.node.json is a real, present TypeScript project-reference config but is not literally named `tsconfig.json`, so it is correctly absent from `technologies` under the current exact-filename matching rule — not a bug, a scope limit worth naming."
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "repo": "restaurant-game",
+  "groundTruthMethod": "Direct inspection: package.json read in full, `ls -a` at repo root, `find` count of *.ts/*.tsx (excluding node_modules/.git/dist) cross-checked against the real scanner output. Private repo — included with the user's explicit confirmation this phase.",
+  "languages": { "TypeScript": 8, "JavaScript": 0, "Python": 0, "C#": 0, "Java": 0 },
+  "technologies": {
+    "phaser": true, "react": false, "vue": false, "svelte": false, "angular": false,
+    "vite": true, "webpack": false, "express": false, "next": false
+  },
+  "configs": {
+    "vite.config.js": false, "vite.config.ts": false, "webpack.config.js": false,
+    "tsconfig.json": true, "jest.config.js": false, "babel.config.js": false
+  },
+  "manifests": {
+    "package.json": true, "package-lock.json": false, "pnpm-lock.yaml": true,
+    "yarn.lock": false, "requirements.txt": false, "pyproject.toml": false
+  },
+  "dependencies": ["phaser", "@damian.diego/claude-toolkit", "typescript", "vite", "vitest"],
+  "structure": {
+    "directories": [".claude", "dist", "docs", "public", "src"],
+    "files": [".DS_Store", ".gitignore", "CLAUDE.md", "README.md", "index.html", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.json"]
+  },
+  "knownGaps": [
+    "pnpm-workspace.yaml is a real, present manifest-adjacent signal (this is a pnpm workspace) but is not in manifest-detector.js's KNOWN_MANIFESTS list — a real gap first found in Phase 12F, re-confirmed here, still not fixed.",
+    "dist/ is a real but build-output directory, reported as structure with no distinction from source directories — structure-detector.js has no build-artifact exclusion beyond node_modules/.git."
+  ]
+}

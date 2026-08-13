@@ -1,0 +1,25 @@
+{
+  "repo": "claude-toolkit",
+  "groundTruthMethod": "Direct inspection: package.json read in full, `ls -a` at repo root, `find` count of *.js (excluding node_modules/.git) cross-checked against the real scanner output.",
+  "languages": { "JavaScript": 35, "TypeScript": 0, "Python": 0, "C#": 0, "Java": 0 },
+  "technologies": {
+    "phaser": false, "react": false, "vue": false, "svelte": false, "angular": false,
+    "vite": false, "webpack": false, "express": false, "next": false
+  },
+  "configs": {
+    "vite.config.js": false, "vite.config.ts": false, "webpack.config.js": false,
+    "tsconfig.json": false, "jest.config.js": false, "babel.config.js": false
+  },
+  "manifests": {
+    "package.json": true, "package-lock.json": true, "pnpm-lock.yaml": false,
+    "yarn.lock": false, "requirements.txt": false, "pyproject.toml": false
+  },
+  "dependencies": ["@changesets/cli"],
+  "structure": {
+    "directories": [".changeset", ".claude", ".github", ".juntia", "agents", "bin", "lib", "scripts", "skills", "templates", "test"],
+    "files": [".DS_Store", ".gitignore", "CLAUDE.md", "GUIDELINES.md", "LICENSE", "MIGRATION_CONTRACT.md", "README.md", "package-lock.json", "package.json"]
+  },
+  "knownGaps": [
+    "@changesets/cli is a real devDependency and a real publish-tooling signal, but is not in dependency-detector.js's KNOWN_TECHNOLOGIES list — expected to be absent from `technologies`, not a scanner bug."
+  ]
+}

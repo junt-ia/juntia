@@ -1,0 +1,23 @@
+{
+  "repo": "juntia",
+  "groundTruthMethod": "Direct inspection: package.json read in full, `ls -a` at repo root, `find` counts of *.js/*.ts (excluding node_modules/.git) cross-checked against the real scanner output.",
+  "languages": { "JavaScript": 40, "TypeScript": 0, "Python": 0, "C#": 0, "Java": 0 },
+  "technologies": {
+    "phaser": false, "react": false, "vue": false, "svelte": false, "angular": false,
+    "vite": false, "webpack": false, "express": false, "next": false
+  },
+  "configs": {
+    "vite.config.js": false, "vite.config.ts": false, "webpack.config.js": false,
+    "tsconfig.json": false, "jest.config.js": false, "babel.config.js": false
+  },
+  "manifests": {
+    "package.json": true, "package-lock.json": false, "pnpm-lock.yaml": false,
+    "yarn.lock": false, "requirements.txt": false, "pyproject.toml": false
+  },
+  "dependencies": [],
+  "structure": {
+    "directories": [".github", "benchmark", "bin", "docs", "lib", "templates", "test"],
+    "files": [".gitignore", "CONTRIBUTING.md", "README.md", "package.json"]
+  },
+  "knownGaps": []
+}

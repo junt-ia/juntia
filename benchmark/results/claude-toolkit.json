@@ -1,0 +1,106 @@
+{
+  "repo": "claude-toolkit",
+  "description": "Juntia's own research/historical-origin repository (Node.js CLI tool, plain JavaScript).",
+  "scannedAt": "2026-08-13T19:44:50.001Z",
+  "stableAcrossThreeRuns": true,
+  "result": {
+    "identity": {
+      "languages": [
+        {
+          "name": "JavaScript",
+          "fileCount": 35,
+          "evidence": [
+            "bin/claude-toolkit.js",
+            "lib/architecture-reasoning.js",
+            "lib/engineering-reasoning.js",
+            "lib/intent-router.js",
+            "lib/intent-runtime-bridge.js"
+          ]
+        }
+      ],
+      "technologies": []
+    },
+    "structure": {
+      "directories": [
+        ".changeset",
+        ".claude",
+        ".github",
+        ".juntia",
+        "agents",
+        "bin",
+        "lib",
+        "scripts",
+        "skills",
+        "templates",
+        "test"
+      ],
+      "files": [
+        ".DS_Store",
+        ".gitignore",
+        "CLAUDE.md",
+        "GUIDELINES.md",
+        "LICENSE",
+        "MIGRATION_CONTRACT.md",
+        "README.md",
+        "package-lock.json",
+        "package.json"
+      ]
+    },
+    "dependencies": [
+      {
+        "name": "@changesets/cli",
+        "version": "^3.0.0",
+        "source": "package.json",
+        "evidence": [
+          "package.json:devDependencies.@changesets/cli"
+        ]
+      }
+    ],
+    "manifests": [
+      "package.json",
+      "package-lock.json"
+    ],
+    "evidence": [
+      {
+        "type": "manifest",
+        "detail": "package.json",
+        "source": "package.json"
+      },
+      {
+        "type": "manifest",
+        "detail": "package-lock.json",
+        "source": "package-lock.json"
+      },
+      {
+        "type": "language",
+        "detail": "JavaScript",
+        "source": "bin/claude-toolkit.js"
+      },
+      {
+        "type": "language",
+        "detail": "JavaScript",
+        "source": "lib/architecture-reasoning.js"
+      },
+      {
+        "type": "language",
+        "detail": "JavaScript",
+        "source": "lib/engineering-reasoning.js"
+      },
+      {
+        "type": "language",
+        "detail": "JavaScript",
+        "source": "lib/intent-router.js"
+      },
+      {
+        "type": "language",
+        "detail": "JavaScript",
+        "source": "lib/intent-runtime-bridge.js"
+      },
+      {
+        "type": "dependency",
+        "detail": "@changesets/cli",
+        "source": "package.json"
+      }
+    ]
+  }
+}

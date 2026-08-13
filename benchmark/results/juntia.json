@@ -1,0 +1,77 @@
+{
+  "repo": "juntia",
+  "description": "This package's own repository (Node.js, plain JavaScript, zero dependencies).",
+  "scannedAt": "2026-08-13T19:44:49.988Z",
+  "stableAcrossThreeRuns": true,
+  "result": {
+    "identity": {
+      "languages": [
+        {
+          "name": "JavaScript",
+          "fileCount": 40,
+          "evidence": [
+            "benchmark/run-benchmark.js",
+            "bin/juntia.js",
+            "lib/architecture-reasoning.js",
+            "lib/engineering-reasoning.js",
+            "lib/index.js"
+          ]
+        }
+      ],
+      "technologies": []
+    },
+    "structure": {
+      "directories": [
+        ".github",
+        "benchmark",
+        "bin",
+        "docs",
+        "lib",
+        "templates",
+        "test"
+      ],
+      "files": [
+        ".gitignore",
+        "CONTRIBUTING.md",
+        "README.md",
+        "package.json"
+      ]
+    },
+    "dependencies": [],
+    "manifests": [
+      "package.json"
+    ],
+    "evidence": [
+      {
+        "type": "manifest",
+        "detail": "package.json",
+        "source": "package.json"
+      },
+      {
+        "type": "language",
+        "detail": "JavaScript",
+        "source": "benchmark/run-benchmark.js"
+      },
+      {
+        "type": "language",
+        "detail": "JavaScript",
+        "source": "bin/juntia.js"
+      },
+      {
+        "type": "language",
+        "detail": "JavaScript",
+        "source": "lib/architecture-reasoning.js"
+      },
+      {
+        "type": "language",
+        "detail": "JavaScript",
+        "source": "lib/engineering-reasoning.js"
+      },
+      {
+        "type": "language",
+        "detail": "JavaScript",
+        "source": "lib/index.js"
+      }
+    ]
+  }
+}

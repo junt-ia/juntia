@@ -1,0 +1,179 @@
+{
+  "repo": "restaurant-game",
+  "description": "A real Phaser + TypeScript + Vite + pnpm game project — the use case that originated Juntia.",
+  "scannedAt": "2026-08-13T19:44:50.002Z",
+  "stableAcrossThreeRuns": true,
+  "result": {
+    "identity": {
+      "languages": [
+        {
+          "name": "TypeScript",
+          "fileCount": 8,
+          "evidence": [
+            "src/game/grid.test.ts",
+            "src/game/grid.ts",
+            "src/game/npc/controller.ts",
+            "src/game/npc/npc.test.ts",
+            "src/game/npc/npc.ts"
+          ]
+        }
+      ],
+      "technologies": [
+        {
+          "name": "phaser",
+          "source": "package.json",
+          "evidence": [
+            "package.json:dependencies.phaser"
+          ]
+        },
+        {
+          "name": "vite",
+          "source": "package.json",
+          "evidence": [
+            "package.json:devDependencies.vite"
+          ]
+        },
+        {
+          "name": "tsconfig.json",
+          "source": "config file",
+          "evidence": [
+            "tsconfig.json"
+          ]
+        }
+      ]
+    },
+    "structure": {
+      "directories": [
+        ".claude",
+        "dist",
+        "docs",
+        "public",
+        "src"
+      ],
+      "files": [
+        ".DS_Store",
+        ".gitignore",
+        "CLAUDE.md",
+        "README.md",
+        "index.html",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "tsconfig.json"
+      ]
+    },
+    "dependencies": [
+      {
+        "name": "phaser",
+        "version": "^4.2.1",
+        "source": "package.json",
+        "evidence": [
+          "package.json:dependencies.phaser"
+        ]
+      },
+      {
+        "name": "@damian.diego/claude-toolkit",
+        "version": "0.7.0",
+        "source": "package.json",
+        "evidence": [
+          "package.json:devDependencies.@damian.diego/claude-toolkit"
+        ]
+      },
+      {
+        "name": "typescript",
+        "version": "~6.0.2",
+        "source": "package.json",
+        "evidence": [
+          "package.json:devDependencies.typescript"
+        ]
+      },
+      {
+        "name": "vite",
+        "version": "^8.2.0",
+        "source": "package.json",
+        "evidence": [
+          "package.json:devDependencies.vite"
+        ]
+      },
+      {
+        "name": "vitest",
+        "version": "^4.1.10",
+        "source": "package.json",
+        "evidence": [
+          "package.json:devDependencies.vitest"
+        ]
+      }
+    ],
+    "manifests": [
+      "package.json",
+      "pnpm-lock.yaml"
+    ],
+    "evidence": [
+      {
+        "type": "manifest",
+        "detail": "package.json",
+        "source": "package.json"
+      },
+      {
+        "type": "manifest",
+        "detail": "pnpm-lock.yaml",
+        "source": "pnpm-lock.yaml"
+      },
+      {
+        "type": "config",
+        "detail": "tsconfig.json",
+        "source": "tsconfig.json"
+      },
+      {
+        "type": "language",
+        "detail": "TypeScript",
+        "source": "src/game/grid.test.ts"
+      },
+      {
+        "type": "language",
+        "detail": "TypeScript",
+        "source": "src/game/grid.ts"
+      },
+      {
+        "type": "language",
+        "detail": "TypeScript",
+        "source": "src/game/npc/controller.ts"
+      },
+      {
+        "type": "language",
+        "detail": "TypeScript",
+        "source": "src/game/npc/npc.test.ts"
+      },
+      {
+        "type": "language",
+        "detail": "TypeScript",
+        "source": "src/game/npc/npc.ts"
+      },
+      {
+        "type": "dependency",
+        "detail": "phaser",
+        "source": "package.json"
+      },
+      {
+        "type": "dependency",
+        "detail": "@damian.diego/claude-toolkit",
+        "source": "package.json"
+      },
+      {
+        "type": "dependency",
+        "detail": "typescript",
+        "source": "package.json"
+      },
+      {
+        "type": "dependency",
+        "detail": "vite",
+        "source": "package.json"
+      },
+      {
+        "type": "dependency",
+        "detail": "vitest",
+        "source": "package.json"
+      }
+    ]
+  }
+}
