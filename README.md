@@ -37,17 +37,19 @@ Not published to npm yet. To try it from a local clone:
 ```
 git clone https://github.com/junt-ia/juntia.git
 cd juntia
-npm test        # 267/267, zero dependencies beyond Node itself
-node bin/juntia.js init   # scaffolds .juntia/ in the current directory
+npm test        # 278/278, zero dependencies beyond Node itself
+node bin/juntia.js init      # scaffolds .juntia/ in the current directory
+node bin/juntia.js analyze   # prints a deterministic inventory of the current directory
 ```
 
-`juntia init` is the only real command today. It creates a `.juntia/` directory (`config.yml`,
-`PROJECT_STATE.md`, `DECISIONS.md`, `RULES.md`, `ARCHITECTURE.md`, `roles/*.md`) in whatever directory you
-run it from — nothing is read, analyzed, or sent anywhere, and running it again never overwrites a file
-that's already there. See [`docs/CLI.md`](docs/CLI.md) for the full public command surface (including
-`analyze`/`update`/`integrate`, designed but not built yet) and
-[`docs/RUNTIME_INTEGRATION.md`](docs/RUNTIME_INTEGRATION.md) for how Juntia talks to an AI runtime and why
-nothing beyond `init` exists yet.
+`init` and `analyze` are the only two real commands today. `init` creates a `.juntia/` directory
+(`config.yml`, `PROJECT_STATE.md`, `DECISIONS.md`, `RULES.md`, `ARCHITECTURE.md`, `roles/*.md`) in whatever
+directory you run it from — nothing is read, analyzed, or sent anywhere, and running it again never
+overwrites a file that's already there. `analyze` detects languages, declared dependencies, recognized
+config files, and top-level structure — purely mechanical (no AI, no interpretation, no project "type"
+guessed) and read-only (nothing is written to `.juntia/` yet). See [`docs/CLI.md`](docs/CLI.md) for the full
+public command surface (`update`/`integrate` still designed, not built) and
+[`docs/PROJECT_INTELLIGENCE.md`](docs/PROJECT_INTELLIGENCE.md) for `analyze`'s exact knowledge model.
 
 The reasoning core is usable programmatically:
 

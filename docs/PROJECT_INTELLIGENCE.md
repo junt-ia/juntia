@@ -1,8 +1,9 @@
-# Project intelligence model (conceptual)
+# Project intelligence model
 
-What Juntia would need to know about a project to eventually support `juntia analyze` — a design, not an
-implementation. No scanner, parser, or AI call exists yet; see [`docs/CLI.md`](CLI.md) for `analyze`'s
-current status.
+What Juntia needs to know about a project to support `juntia analyze`. The **Deterministic** tier below is
+real and built (`lib/project-intelligence/`, exercised by `juntia analyze`) — the AI Assisted and Human
+Decision tiers remain design only, no AI call exists yet. See [`docs/CLI.md`](CLI.md) for `analyze`'s exact
+current behavior.
 
 ## Juntia does not try to understand everything
 
@@ -36,14 +37,37 @@ When two sources disagree, the conflict is reported explicitly — never resolve
 
 ## Automation tiers
 
-| Tier | Examples | AI required? |
-|---|---|---|
-| **Deterministic** | Detect language, read `package.json`/`Cargo.toml`/`*.csproj`, list folders, list dependencies | Never |
-| **AI Assisted** | Summarize purpose, propose architecture components, draft candidate documentation | Only when it adds real value |
-| **Human Decision** | Product decisions, approving a detected pattern as a binding rule, resolving a source conflict | Never automated |
+| Tier | Examples | AI required? | Status |
+|---|---|---|---|
+| **Deterministic** | Detect language, read `package.json`/lockfiles/`pyproject.toml`, list top-level folders, list declared dependencies, recognize config files | Never | **Built** — `juntia analyze` |
+| **AI Assisted** | Summarize purpose, propose architecture components, draft candidate documentation | Only when it adds real value | Designed, not built |
+| **Human Decision** | Product decisions, approving a detected pattern as a binding rule, resolving a source conflict | Never automated | Designed, not built |
 
 Across every `.juntia/` file: **detecting and proposing content can be automated; writing it in as a
-recorded fact never is.** `DECISIONS.md` entries in particular are never auto-generated, by definition.
+recorded fact never is.** `DECISIONS.md` entries in particular are never auto-generated, by definition. The
+built Deterministic tier only ever detects and prints — it does not yet write anything into `.juntia/`.
+
+## The Deterministic tier, concretely
+
+`lib/project-intelligence/scanner.js` orchestrates five detectors
+(`detectors/{manifest,language,dependency,structure,config}-detector.js`), each presence-only or
+extraction-only — none of them interpret. `scanProject(projectRoot)` returns:
+
+```js
+{
+  identity: { languages: [{ name, fileCount, evidence }], technologies: [{ name, source, evidence }] },
+  structure: { directories: [], files: [] },
+  dependencies: [{ name, version, source, evidence }],
+  manifests: [],   // e.g. ["package.json"]
+  evidence: [],     // flat log of every observation, same facts as above
+}
+```
+
+Every fact carries its own `evidence` — a real file path or manifest key, never a bare claim. Finding a
+`phaser` dependency is reported as exactly that; it is never promoted to "this is a game" — that
+interpretation, if it ever happens, belongs to the AI Assisted tier, not this one. An empty/unrecognized
+project returns empty arrays across the board — the honest representation of "genuinely unknown," not a
+guess.
 
 ## Reuses an existing, already-tested contract
 
