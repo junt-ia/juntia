@@ -69,6 +69,13 @@ interpretation, if it ever happens, belongs to the AI Assisted tier, not this on
 project returns empty arrays across the board — the honest representation of "genuinely unknown," not a
 guess.
 
+## From facts to knowledge
+
+Turning these deterministic facts into interpreted knowledge (the AI Assisted tier above) is designed, not
+built — see [`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md) for the FACT/INTERPRETATION/DECISION model
+that governs how that would work without ever inventing a fact or silently promoting a guess into a
+recorded decision.
+
 ## Reuses an existing, already-tested contract
 
 `analyze`'s eventual output for the Architecture category is not a new data shape — it's a real instance of
