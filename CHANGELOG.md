@@ -8,6 +8,36 @@ All notable changes to `@juntia/juntia` are documented here. Format loosely foll
 
 Nothing yet.
 
+## [0.5.0] - 2026-08-14
+
+Agent Governance for Claude Code: Phase 13D gave a connected agent memory (facts, decisions, context, a
+handoff for producing a new interpretation). This gives it behavior — how it should work, not just what it
+knows.
+
+### Added
+
+- `.juntia/agent-rules.md` (`lib/project-intelligence/agent-governance.js`, new) — fixed, deterministic
+  rules for how any connected agent should behave in a Juntia-governed project: analyze before modifying,
+  respect confirmed decisions, never add a dependency without stating why, ask when a request conflicts with
+  something already decided, validate changes, never write directly to `.juntia/decisions.json`. The same
+  content for every project — Juntia's own standing policy, not derived per-project. Deliberately not named
+  `rules.md`/`RULES.md`: that name is already taken by a real, human-authored, project-specific constraints
+  file (`.juntia/RULES.md`, scaffolded by `init`, never auto-written) with a genuinely different author and
+  purpose.
+- `.juntia/workflows.md` (same module) — the recommended sequence for a new feature (analyze impact → review
+  architecture → propose → wait for confirmation if it conflicts with a decision → implement → validate) and
+  for a bug fix (reproduce → investigate → modify → validate). Same fixed-content model as `agent-rules.md`.
+- Both generated automatically by `juntia integrate <runtime>` (and `setup`, which calls it) alongside the
+  existing handoff file, and gated behind the same "never overwrite a real, human-authored `CLAUDE.md`"
+  protection `integrate` already had.
+
+### Changed
+
+- `juntia integrate claude-code`'s generated `CLAUDE.md` evolved from a two-file pointer into a governance
+  **index**: it now opens with "Juntia is configured for this project" and lists every real file
+  (`context.md`, `DECISIONS.md`, `agent-rules.md`, `workflows.md`, `agent-instructions.md`, and `RULES.md`
+  when it actually exists) — never copying any of their content, only naming and pointing at them.
+
 ## [0.4.0] - 2026-08-14
 
 The AI Handoff: Juntia no longer executes an AI runtime internally. Closes the real dogfooding finding from

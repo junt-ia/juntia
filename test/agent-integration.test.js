@@ -86,6 +86,32 @@ test('a real, human-authored file (no marker) is never mistaken for Juntia-gener
   assert.equal(isJuntiaGenerated('# My real CLAUDE.md\n\nOur team conventions...\n'), false);
 });
 
+// --- buildPointerContent as a governance index (Phase 14A) -------------------
+
+test('buildPointerContent indexes every real governance file, and states Juntia is configured', () => {
+  const content = buildPointerContent(RUNTIME_PROFILES['claude-code'], 'claude-code');
+  assert.match(content, /Juntia is configured for this project/);
+  assert.match(content, /\.juntia\/context\.md/);
+  assert.match(content, /\.juntia\/DECISIONS\.md/);
+  assert.match(content, /\.juntia\/agent-rules\.md/);
+  assert.match(content, /\.juntia\/workflows\.md/);
+  assert.match(content, /\.juntia\/agent-instructions\.md/);
+});
+
+test('buildPointerContent mentions .juntia/RULES.md only when hasProjectRules is true', () => {
+  const without = buildPointerContent(RUNTIME_PROFILES['claude-code'], 'claude-code');
+  assert.doesNotMatch(without, /\.juntia\/RULES\.md/);
+
+  const withRules = buildPointerContent(RUNTIME_PROFILES['claude-code'], 'claude-code', { hasProjectRules: true });
+  assert.match(withRules, /\.juntia\/RULES\.md/);
+});
+
+test('buildPointerContent never copies content from any of the files it indexes — only names them', () => {
+  const content = buildPointerContent(RUNTIME_PROFILES['claude-code'], 'claude-code');
+  assert.doesNotMatch(content, /Analyze before modifying/, 'must not duplicate agent-rules.md content');
+  assert.doesNotMatch(content, /## New feature/, 'must not duplicate workflows.md content');
+});
+
 // --- integrateRuntime: the full, real function ------------------------------
 
 test('an unsupported runtime is refused with a clear, actionable reason — nothing is written', () => {
@@ -173,6 +199,17 @@ test('integrateRuntime never touches facts.json, decisions.json, pending.json, o
   assert.equal(fs.readFileSync(path.join(root, '.juntia', 'facts.json'), 'utf8'), before.facts);
   assert.equal(fs.readFileSync(path.join(root, '.juntia', 'decisions.json'), 'utf8'), before.decisions);
   assert.equal(fs.readFileSync(path.join(root, '.juntia', 'context.md'), 'utf8'), before.context);
+});
+
+test('integrateRuntime detects a real, existing .juntia/RULES.md and references it in the generated CLAUDE.md', () => {
+  const root = tempProject();
+  withRealJuntiaDir(root);
+  writeFile(root, '.juntia/RULES.md', '# Rules\n\n## Technical constraints\n\n- Must run on Node 18+\n');
+
+  integrateRuntime(root, 'claude-code');
+
+  const content = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+  assert.match(content, /\.juntia\/RULES\.md/);
 });
 
 test('works with runtime.provider left at null — integrate never reads or requires it', () => {

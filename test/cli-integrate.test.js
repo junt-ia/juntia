@@ -45,6 +45,22 @@ test('no runtime argument -> refused with usage guidance, nothing written', () =
   assert.equal(fs.existsSync(path.join(root, '.juntia')), false);
 });
 
+test('when a real, human-authored CLAUDE.md blocks integration, agent-rules.md/workflows.md are not created either', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
+  writeFile(root, 'CLAUDE.md', '# Our real team conventions\n\nDo not touch.\n');
+
+  return (async () => {
+    await silently(() => runAnalyze(root));
+    silently(() => runContext(root));
+    const result = silently(() => runIntegrate('claude-code', root));
+
+    assert.equal(result.ok, false);
+    assert.equal(fs.existsSync(path.join(root, '.juntia', 'agent-rules.md')), false);
+    assert.equal(fs.existsSync(path.join(root, '.juntia', 'workflows.md')), false);
+  })();
+});
+
 test('the real end-to-end flow (init -> analyze -> context -> integrate) produces exactly the expected new files', () => {
   const root = tempProject();
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
@@ -132,6 +148,20 @@ test('integrate generates .juntia/agent-instructions.md alongside the runtime po
     assert.ok(fs.existsSync(handoffPath));
     const content = fs.readFileSync(handoffPath, 'utf8');
     assert.match(content, /id:\[dependency:phaser\]/);
+  })();
+});
+
+test('integrate generates .juntia/agent-rules.md and .juntia/workflows.md alongside the runtime pointer file (Phase 14A)', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
+
+  return (async () => {
+    await silently(() => runAnalyze(root));
+    silently(() => runContext(root));
+    silently(() => runIntegrate('claude-code', root));
+
+    assert.ok(fs.existsSync(path.join(root, '.juntia', 'agent-rules.md')));
+    assert.ok(fs.existsSync(path.join(root, '.juntia', 'workflows.md')));
   })();
 });
 

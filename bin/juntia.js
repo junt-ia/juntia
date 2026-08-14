@@ -19,6 +19,7 @@ const {
   integrateRuntime, RUNTIME_PROFILES, PLANNED_PROVIDERS, readRuntimeProvider, withRuntimeProvider,
 } = require('../lib/project-intelligence/agent-integration.js');
 const { HANDOFF_FILE, buildHandoffInstructions, writeHandoffInstructions } = require('../lib/project-intelligence/agent-handoff.js');
+const { writeAgentGovernance } = require('../lib/project-intelligence/agent-governance.js');
 const { validateProjectInterpretation } = require('../lib/runtime/project-interpretation-validator.js');
 
 const PACKAGE_ROOT = path.join(__dirname, '..');
@@ -388,6 +389,11 @@ function runIntegrate(runtimeName, projectRoot = process.cwd(), { silent = false
   const facts = (factsDoc.exists && !factsDoc.unknown) ? factsDoc.document.facts : [];
   const { decisions } = loadDecisions(projectRoot);
   writeHandoffInstructions(projectRoot, buildHandoffInstructions(facts, undefined, decisions));
+
+  // Agent Governance (Phase 14A): fixed, deterministic content — the same
+  // for every project, no facts/decisions input needed — so it's always
+  // safe to regenerate here unconditionally, same as the handoff file.
+  writeAgentGovernance(projectRoot);
 
   log(`Created/updated ${result.file}${result.configUpdated ? ' and .juntia/config.yml' : ''}.`);
   log(`${result.file} points to .juntia/context.md — nothing was copied, nothing was sent anywhere.`);

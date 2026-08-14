@@ -50,10 +50,10 @@ npx juntia setup
 ```
 
 That's it for getting started — `setup` walks through everything: it initializes the project if needed,
-analyzes it, asks an AI runtime for an interpretation once an assistant is configured (with your confirmation
-before anything is recorded as a decision), builds `.juntia/context.md`, asks which AI assistant you use, and
-configures that integration. Safe to run again any time — it never repeats a step that's already done, and
-never overwrites a real file it didn't create itself.
+analyzes it, reviews anything your AI agent already proposed (if `.juntia/pending.json` has items from an
+earlier session — your confirmation before anything is recorded as a decision), builds `.juntia/context.md`,
+asks which AI assistant you use, and configures that integration. Safe to run again any time — it never
+repeats a step that's already done, and never overwrites a real file it didn't create itself.
 
 ```
 $ npx juntia setup
@@ -85,6 +85,7 @@ Configuring Claude Code...
 ✓ Connected project context
 
 Juntia is ready.
+Open Claude Code and ask it to follow .juntia/agent-instructions.md to interpret this project.
 ```
 
 ### Advanced: the individual commands
@@ -94,10 +95,10 @@ Juntia is ready.
 ```
 npx juntia init                 # scaffolds .juntia/ in the current directory
 npx juntia analyze              # inventories the current directory and remembers what it found
-npx juntia analyze --explain    # also asks an AI runtime for an interpretation, saved as pending
+npx juntia analyze --explain    # also refreshes .juntia/agent-instructions.md, the handoff for your own AI agent
 npx juntia confirm              # you review each pending interpretation — yes becomes a decision, no discards it
 npx juntia context              # (re)builds .juntia/context.md from confirmed facts + confirmed decisions
-npx juntia integrate claude-code  # generates CLAUDE.md so Claude Code reads that context automatically
+npx juntia integrate claude-code  # generates CLAUDE.md so Claude Code finds everything above automatically
 ```
 
 `init` creates a `.juntia/` directory (`config.yml`, `PROJECT_STATE.md`, `DECISIONS.md`, `RULES.md`,
@@ -108,24 +109,26 @@ interpretation, no project "type" guessed) — and persists what it found to `.j
 (git-ignored by default): the first run creates that baseline, every run after that reports what's
 Added/Removed/Changed since last time.
 
-`--explain` (opt-in only — plain `analyze` never calls an AI runtime or spends anything) sends those same
-real facts to the same authenticated Claude Code CLI session already used for intent interpretation, prints
-its interpretation to the console — clearly labeled as non-authoritative — and saves it as a pending item in
-`.juntia/pending.json`. Every claim it makes must cite a real fact by an exact identifier; a citation that
-doesn't match a real fact is rejected outright, not silently trusted.
+Juntia does not execute an AI runtime itself, for any command — `--explain` (opt-in, plain `analyze` never
+touches it) refreshes `.juntia/agent-instructions.md`: a deterministic handoff explaining, to whichever AI
+agent you already have open, how to interpret those same real facts and where to write its proposal
+(`.juntia/pending.json`). Every claim it makes must cite a real fact by an exact identifier; a citation that
+doesn't match a real fact is rejected outright, not silently trusted, before a human ever sees it.
 
-Nothing becomes a decision until a human says so: `juntia confirm` walks you through each pending
+Nothing becomes a decision until a human says so: `juntia confirm` walks you through each valid pending
 interpretation and asks. Answering yes writes a real, traceable decision to `.juntia/decisions.json` and
 appends a plain-English line to `.juntia/DECISIONS.md`; answering no discards it. A confirmed decision is
 never deleted or silently rewritten by a later `analyze` — if the facts it cited change, it's flagged
 `conflicted` for you to review, not erased. `juntia context` assembles `.juntia/context.md` from confirmed
 facts and confirmed decisions only — never from something still pending.
 
-Juntia's context is only useful if an agent actually reads it: `juntia integrate claude-code` generates a
-short `CLAUDE.md` at your project root pointing Claude Code at `.juntia/context.md` — no copy of the content,
-no AI call, nothing sent anywhere, and it never overwrites a `CLAUDE.md` you already wrote yourself. Other
-runtimes (Codex, Gemini, Cursor) are architecturally supported but not built yet — no real evidence for their
-own conventions exists in this repo yet, so nothing was guessed at.
+Juntia's context is only useful if an agent actually reads it: `juntia integrate claude-code` generates
+`CLAUDE.md` at your project root as a governance **index** — pointing Claude Code at `context.md`,
+`DECISIONS.md`, the generated `agent-rules.md`/`workflows.md` (how to behave, and in what order), and
+`agent-instructions.md` — no copy of any of their content, no AI call, nothing sent anywhere, and it never
+overwrites a `CLAUDE.md` you already wrote yourself. Other runtimes (Codex, Gemini, Cursor) are
+architecturally supported but not built yet — no real evidence for their own conventions exists in this repo
+yet, so nothing was guessed at.
 
 See [`docs/CLI.md`](docs/CLI.md) for the full public command surface (`update` still designed, not built) and
 [`docs/PROJECT_INTELLIGENCE.md`](docs/PROJECT_INTELLIGENCE.md) /
