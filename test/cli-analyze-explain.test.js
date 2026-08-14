@@ -1,9 +1,12 @@
 'use strict';
 
-// Phase 12J — tests for bin/juntia.js's `analyze --explain` wiring. Uses a
-// mock adapter injected via runAnalyze's options (same pattern
-// test/intent-runtime-bridge.test.js uses) — no live CLI call in this file,
-// consistent with the rest of this suite's determinism/CI-safety.
+// Phase 12J — tests for bin/juntia.js's `analyze --explain` wiring.
+// Redefined by Phase 13D: Juntia no longer executes an AI runtime itself
+// (no adapter, no subprocess, no live/mocked call in this file at all) —
+// `--explain` refreshes `.juntia/agent-instructions.md` (the AI Handoff,
+// see lib/project-intelligence/agent-handoff.js) and reports how many
+// interpretations are already pending, deterministically, from the same
+// facts/diff `analyze` already computed.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -11,7 +14,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { runAnalyze, formatInterpretation } = require('../bin/juntia.js');
+const { runAnalyze, formatHandoffStatus } = require('../bin/juntia.js');
+const { upsertPending } = require('../lib/project-intelligence/pending-store.js');
 
 function tempProject() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'juntia-explain-test-'));
@@ -23,12 +27,6 @@ function writeFile(root, relativePath, content) {
   fs.writeFileSync(full, content);
 }
 
-// Restores console.log only after `fn()`'s own promise settles, not right
-// after `fn()` is called — a real bug found by actually running these tests
-// (not assumed): for an async fn, a plain try/finally restores logging
-// before the awaited work inside it (e.g. anything after `await
-// synthesizeContext(...)`) actually runs, letting real output leak to the
-// terminal during a supposedly-silent test.
 function silently(fn) {
   const originalLog = console.log;
   console.log = () => {};
@@ -40,78 +38,77 @@ function silently(fn) {
   return result;
 }
 
-function mockAdapter(response) {
-  return { interpret: async () => response };
-}
-
-test('without --explain, runAnalyze never touches the runtime adapter and returns undefined', async () => {
+test('without --explain, runAnalyze never writes agent-instructions.md and returns undefined', async () => {
   const root = tempProject();
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.0.0' } }));
-  const adapter = { interpret: async () => { throw new Error('must not be called without --explain'); } };
 
-  const result = await silently(() => runAnalyze(root, { adapter }));
+  const result = await silently(() => runAnalyze(root));
   assert.equal(result, undefined);
+  assert.equal(fs.existsSync(path.join(root, '.juntia', 'agent-instructions.md')), false);
 });
 
-// Phase 12K deliberately revised this guarantee: a valid interpretation is
-// now persisted to .juntia/pending.json (the lifecycle Phase 12J evaluated
-// and did not build, since no confirm/reject policy existed yet — it does
-// now, see test/pending-store.test.js and test/decisions-store.test.js).
-// What's still guaranteed, and tested below, is the narrower claim: still
-// nothing written outside `.juntia/`, and no decisions.json/context.md
-// appear until a human runs `juntia confirm`.
-test('with explain: true, a valid runtime interpretation is returned, printed, and persisted as a pending item — still writing only inside .juntia/, never a decision', async () => {
+test('with explain: true, .juntia/agent-instructions.md is generated with real facts, and nothing else is written outside .juntia/', async () => {
   const root = tempProject();
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.0.0' } }));
-  const adapter = mockAdapter({
-    ok: true,
-    raw: JSON.stringify({
-      interpretation: 'This project appears to use Phaser.',
-      confidence: 'medium',
-      basedOn: ['dependency:phaser'],
-      unknowns: [],
-    }),
-    durationMs: 300,
-  });
 
-  const synthesis = await silently(() => runAnalyze(root, { explain: true, adapter }));
+  const markdown = await silently(() => runAnalyze(root, { explain: true }));
 
-  assert.equal(synthesis.ok, true);
-  assert.equal(synthesis.result.confidence, 'medium');
-
+  assert.match(markdown, /dependency:phaser/);
   const juntiaContents = fs.readdirSync(path.join(root, '.juntia')).sort();
-  assert.deepEqual(juntiaContents, ['.gitignore', 'facts.json', 'pending.json'], '--explain must write only inside .juntia/, and never a decisions.json/context.md on its own');
+  assert.deepEqual(juntiaContents, ['.gitignore', 'agent-instructions.md', 'facts.json'], '--explain must write only .juntia/agent-instructions.md beyond what analyze already writes');
 });
 
-test('with explain: true and a runtime/validation failure, analyze still completes normally (facts still persisted) and reports the failure, never crashes', async () => {
+test('--explain never invokes any subprocess or AI runtime — no adapter is required, no live call is possible', async () => {
   const root = tempProject();
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.0.0' } }));
-  const adapter = mockAdapter({ ok: false, error: 'timeout', message: 'killed', durationMs: 30000 });
 
-  const synthesis = await silently(() => runAnalyze(root, { explain: true, adapter }));
-
-  assert.equal(synthesis.ok, false);
-  assert.match(synthesis.reason, /runtime failure/);
-  assert.ok(fs.existsSync(path.join(root, '.juntia', 'facts.json')), 'facts persistence must not be affected by an --explain failure');
+  // No CLAUDE_CODE_EXECPATH, no PATH, nothing — if `runAnalyze` still tried
+  // to spawn anything, this environment gives it no way to succeed. It must
+  // still complete normally.
+  const originalExecPath = process.env.CLAUDE_CODE_EXECPATH;
+  const originalPath = process.env.PATH;
+  delete process.env.CLAUDE_CODE_EXECPATH;
+  process.env.PATH = '';
+  try {
+    const markdown = await silently(() => runAnalyze(root, { explain: true }));
+    assert.ok(markdown);
+  } finally {
+    if (originalExecPath !== undefined) process.env.CLAUDE_CODE_EXECPATH = originalExecPath;
+    process.env.PATH = originalPath;
+  }
 });
 
-test('formatInterpretation clearly labels a failed synthesis as unavailable, never as a fact', () => {
-  const output = formatInterpretation({ ok: false, reason: 'runtime failure: timeout — killed' });
-  assert.match(output, /not available/);
-  assert.match(output, /No file was written/);
+test('formatHandoffStatus reports zero pending items plainly, pointing at the handoff file', () => {
+  const output = formatHandoffStatus(0);
+  assert.match(output, /agent-instructions\.md/);
+  assert.match(output, /pending\.json/);
 });
 
-test('formatInterpretation clearly labels a successful synthesis as non-authoritative (not a fact, not saved, not a decision)', () => {
-  const output = formatInterpretation({
-    ok: true,
-    result: {
-      interpretation: 'This is a Phaser game.',
-      confidence: 'high',
-      basedOn: ['dependency:phaser'],
-      unknowns: [],
-    },
+test('formatHandoffStatus reports a nonzero pending count and points at `juntia confirm`', () => {
+  const output = formatHandoffStatus(2);
+  assert.match(output, /2 pending interpretation\(s\)/);
+  assert.match(output, /juntia confirm/);
+});
+
+test('--explain reports existing pending items already waiting, without touching them', async () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.0.0' } }));
+  await silently(() => runAnalyze(root));
+  upsertPending(root, {
+    interpretation: 'This project appears to use Phaser.',
+    confidence: 'medium',
+    basedOn: ['dependency:phaser'],
+    unknowns: [],
   });
-  assert.match(output, /not a fact, not saved, not a decision/);
-  assert.match(output, /confidence: high/);
-  assert.match(output, /based on: dependency:phaser/);
+
+  let captured = '';
+  const originalLog = console.log;
+  console.log = (line = '') => { captured += `${line}\n`; };
+  try {
+    await runAnalyze(root, { explain: true });
+  } finally {
+    console.log = originalLog;
+  }
+
+  assert.match(captured, /1 pending interpretation\(s\) already waiting/);
 });

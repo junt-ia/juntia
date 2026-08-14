@@ -8,7 +8,9 @@ const { scanProject } = require('../lib/project-intelligence/scanner.js');
 const {
   factsFromScanResult, loadFacts, saveFacts, compareFacts,
 } = require('../lib/project-intelligence/facts-store.js');
-const { interpretationId, loadPending, upsertPending, removePending } = require('../lib/project-intelligence/pending-store.js');
+const {
+  interpretationId, loadPending, normalizePendingItems, removePending,
+} = require('../lib/project-intelligence/pending-store.js');
 const {
   loadDecisions, recordDecision, detectConflicts, markConflicted, appendDecisionNarrative,
 } = require('../lib/project-intelligence/decisions-store.js');
@@ -16,7 +18,8 @@ const { generateContext, writeContext } = require('../lib/project-intelligence/c
 const {
   integrateRuntime, RUNTIME_PROFILES, PLANNED_PROVIDERS, readRuntimeProvider, withRuntimeProvider,
 } = require('../lib/project-intelligence/agent-integration.js');
-const { resolveProvider } = require('../lib/runtime/provider-registry.js');
+const { HANDOFF_FILE, buildHandoffInstructions, writeHandoffInstructions } = require('../lib/project-intelligence/agent-handoff.js');
+const { validateProjectInterpretation } = require('../lib/runtime/project-interpretation-validator.js');
 
 const PACKAGE_ROOT = path.join(__dirname, '..');
 const TEMPLATES_DIR = path.join(PACKAGE_ROOT, 'templates');
@@ -147,32 +150,21 @@ function formatChanges({ added, removed, changed }) {
   return lines.join('\n');
 }
 
-// Prints a runtime interpretation (Phase 12J) to the console only — never
-// written to a file. This is Option A of the two output surfaces the phase
-// evaluated (the other, `.juntia/pending.json`, was deliberately not built
-// this phase; see phases/12j-context-synthesis-runtime-evaluation.md). An
-// interpretation is never mistaken for a fact: every line here is
-// explicitly labeled and clearly separated from `formatAnalysis()`'s own
-// output above it.
-function formatInterpretation(synthesis) {
-  if (!synthesis.ok) {
-    return [
-      'AI interpretation: not available.',
-      formatRuntimeFailure(synthesis),
-      'No file was written and no interpretation was recorded — nothing here is a fact or a decision.',
-    ].join('\n');
-  }
-  const { interpretation, confidence, basedOn, unknowns } = synthesis.result;
+// Reports the state of the AI Handoff (Phase 13D) after `analyze --explain`
+// refreshes `.juntia/agent-instructions.md` — never an interpretation
+// itself, since Juntia does not produce one anymore. Distinguishes three
+// real states: pending items already waiting on a human (from a previous
+// agent run), none yet (first time, or the agent hasn't responded yet), and
+// always names the concrete next action either way.
+function formatHandoffStatus(pendingCount) {
   const lines = [
-    'AI interpretation (not a fact, not saved, not a decision — for you to confirm or discard):',
-    '',
-    `  ${interpretation}`,
-    `  confidence: ${confidence}`,
-    `  based on: ${basedOn.join(', ')}`,
+    `Handoff instructions refreshed at ${HANDOFF_FILE}.`,
+    'Open your AI assistant (e.g. Claude Code) and ask it to follow those instructions to interpret this project.',
   ];
-  if (unknowns.length > 0) {
-    lines.push('  unknowns:');
-    for (const u of unknowns) lines.push(`    - ${u.topic}: ${u.reason}`);
+  if (pendingCount > 0) {
+    lines.push(`${pendingCount} pending interpretation(s) already waiting — run \`juntia confirm\` to review them.`);
+  } else {
+    lines.push('It will write its proposal to .juntia/pending.json; run `juntia confirm` afterward to review it.');
   }
   return lines.join('\n');
 }
@@ -184,15 +176,17 @@ function formatInterpretation(synthesis) {
 // UNKNOWN and treated as a fresh baseline — never guessed at, never crashes.
 // The only file this writes is .juntia/facts.json (and, once, .juntia/.gitignore)
 // — verified by test (test/facts-store.test.js, test/cli-analyze.test.js).
-// `--explain` (Phase 12J) never adds a file write: it only decides whether
-// an extra, clearly-labeled console section is printed after the same
-// facts this command already computed. Without it, behavior is byte-for-
-// byte identical to before Phase 12J — a real runtime call/cost only ever
-// happens when explicitly requested.
-// Returns the runtime synthesis result when `explain` was requested
-// (undefined otherwise) — mainly so tests can await completion and inspect
-// what happened, without needing to spy on console.log.
-async function runAnalyze(projectRoot = process.cwd(), { explain = false, adapter = null, adapterOptions } = {}) {
+// `--explain` (Phase 12J; redefined Phase 13D) never adds a file write
+// beyond `.juntia/agent-instructions.md` itself, and never spawns anything:
+// Juntia does not execute an AI runtime internally (see phases/13d-ai-
+// handoff-implementation.md). It only refreshes the handoff instructions an
+// external AI agent reads from the same facts/diff this command already
+// computed, and reports how many interpretations are already pending.
+// Without it, behavior is byte-for-byte identical to plain `analyze`.
+// Returns the handoff markdown when `explain` was requested (undefined
+// otherwise) — mainly so tests can inspect what was generated without
+// needing to re-read the file from disk.
+async function runAnalyze(projectRoot = process.cwd(), { explain = false } = {}) {
   const result = scanProject(projectRoot);
   console.log(formatAnalysis(result));
   console.log('');
@@ -233,48 +227,20 @@ async function runAnalyze(projectRoot = process.cwd(), { explain = false, adapte
 
   console.log('');
 
-  // Phase 13B: never guess which runtime to call. An injected `adapter`
-  // (tests, or a future programmatic caller) always wins; otherwise the
-  // configured provider is resolved for real from .juntia/config.yml — and
-  // if nothing resolves, this returns early with a plain, actionable
-  // message instead of silently defaulting to the Claude CLI adapter the
-  // way every phase before this one did.
-  let runtimeAdapter = adapter;
-  if (!runtimeAdapter) {
-    const resolved = resolveConfiguredAdapter(projectRoot);
-    if (!resolved.ok) {
-      console.log(formatUnresolvedRuntime(resolved));
-      return undefined;
-    }
-    runtimeAdapter = resolved.adapter;
-  }
+  const markdown = buildHandoffInstructions(facts, diff, existingDecisions);
+  writeHandoffInstructions(projectRoot, markdown);
 
-  const { synthesizeContext } = require('../lib/project-intelligence/context-synthesis-bridge.js');
-  const synthesis = await synthesizeContext(facts, diff, { adapter: runtimeAdapter, adapterOptions, decisions: existingDecisions });
-  console.log(formatInterpretation(synthesis));
+  const { items: pendingItems } = normalizePendingItems(projectRoot);
+  console.log(formatHandoffStatus(pendingItems.length));
 
-  if (synthesis.ok) {
-    const id = interpretationId(synthesis.result.basedOn);
-    const alreadyDecided = existingDecisions.find((d) => d.id === id);
-    console.log('');
-    if (alreadyDecided) {
-      console.log(`This matches an already-confirmed decision: "${alreadyDecided.text}" (confirmed ${alreadyDecided.confirmedAt.slice(0, 10)}) — nothing new to confirm.`);
-    } else {
-      const pendingId = upsertPending(projectRoot, synthesis.result);
-      console.log(`Saved as a pending interpretation (id: ${pendingId}) — run \`juntia confirm\` to confirm or reject it.`);
-    }
-  }
-
-  return synthesis;
+  return markdown;
 }
 
 // Real, interactive confirmation of one pending interpretation at a time —
 // the only code path in this codebase that writes to `.juntia/decisions.json`,
 // and it only runs after a real human answers a real question. `prompt` is
 // injectable (defaults to a real `readline/promises` prompt over
-// stdin/stdout) so tests can drive it without touching a real terminal —
-// same dependency-injection pattern `runAnalyze` already uses for the
-// runtime adapter.
+// stdin/stdout) so tests can drive it without touching a real terminal.
 async function defaultPrompt(question) {
   const readline = require('readline/promises');
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -286,7 +252,11 @@ async function defaultPrompt(question) {
 }
 
 async function runConfirm(projectRoot = process.cwd(), { prompt = defaultPrompt } = {}) {
-  const pending = loadPending(projectRoot);
+  // normalizePendingItems (not plain loadPending): Phase 13D — pending.json
+  // can now be written directly by an external AI agent (see
+  // agent-handoff.js), so an item's `id` can no longer be assumed present or
+  // trustworthy the way a Juntia-only writer always guaranteed.
+  const pending = normalizePendingItems(projectRoot);
   if (pending.unknown) {
     console.log(`.juntia/pending.json could not be used (${pending.reason}) — nothing to confirm.`);
     return { confirmed: [], rejected: [], stale: [] };
@@ -298,26 +268,43 @@ async function runConfirm(projectRoot = process.cwd(), { prompt = defaultPrompt 
 
   const factsDoc = loadFacts(projectRoot);
   const facts = (factsDoc.exists && !factsDoc.unknown) ? factsDoc.document.facts : [];
-  const factKeys = new Set(facts.map((f) => `${f.category}:${f.name}`));
+  const { decisions: existingDecisions } = loadDecisions(projectRoot);
+  const decisionIds = new Set(existingDecisions.map((d) => d.id));
 
   const confirmed = [];
   const rejected = [];
   const stale = [];
 
   for (const item of pending.items) {
-    // Re-validated against the CURRENT facts, not just trusted from when the
-    // interpretation was first generated — facts can change between an
-    // `analyze --explain` and a later `confirm`. A pending item grounded in
-    // a fact that no longer exists is not asked about; it is dropped with an
-    // explanation, since confirming it would create a decision whose own
-    // cited evidence is already gone.
-    const missing = item.basedOn.filter((b) => !factKeys.has(b));
-    if (missing.length > 0) {
+    // Every pending item is now untrusted input until proven otherwise — it
+    // may have come from Juntia's own (retired) internal path, or directly
+    // from an external AI agent following .juntia/agent-instructions.md, and
+    // this is the FIRST point anything checks its shape or its citations
+    // against the CURRENT facts (they can change between when an agent wrote
+    // its proposal and this later `confirm`). Malformed shape, a forbidden
+    // governance field, or a fact identifier that was never real — all fail
+    // the same way: dropped, never asked about, never a decision.
+    const validation = validateProjectInterpretation(item, facts);
+    if (!validation.valid) {
       console.log('');
-      console.log(`Skipping "${item.interpretation}" — based on evidence that no longer exists (${missing.join(', ')}).`);
-      console.log('Run `juntia analyze --explain` again for a fresh interpretation.');
+      console.log(`Skipping a pending proposal — invalid (${validation.errors.join('; ')}).`);
+      console.log('If this came from an AI agent, ask it to re-read `.juntia/agent-instructions.md` and try again.');
       removePending(projectRoot, item.id);
       stale.push(item.id);
+      continue;
+    }
+
+    // A valid proposal that turns out to cite exactly the same facts as an
+    // already-confirmed decision is not asked about again — matching the
+    // guarantee this codebase has always given (see decisions-store.js's
+    // own dedup-by-basedOn design), now enforced here since Juntia no longer
+    // controls whether/when a proposal is written to pending.json.
+    const id = interpretationId(validation.result.basedOn);
+    const alreadyDecided = existingDecisions.find((d) => d.id === id);
+    if (alreadyDecided) {
+      console.log('');
+      console.log(`"${item.interpretation}" already matches a confirmed decision: "${alreadyDecided.text}" — nothing new to confirm.`);
+      removePending(projectRoot, item.id);
       continue;
     }
 
@@ -393,6 +380,15 @@ function runIntegrate(runtimeName, projectRoot = process.cwd(), { silent = false
     return result;
   }
 
+  // Refreshed alongside the pointer file, from whatever facts/decisions
+  // already exist — generic, not runtime-specific (any agent reading it can
+  // follow the same instructions), so it is regenerated here regardless of
+  // which runtime was just integrated (Phase 13D).
+  const factsDoc = loadFacts(projectRoot);
+  const facts = (factsDoc.exists && !factsDoc.unknown) ? factsDoc.document.facts : [];
+  const { decisions } = loadDecisions(projectRoot);
+  writeHandoffInstructions(projectRoot, buildHandoffInstructions(facts, undefined, decisions));
+
   log(`Created/updated ${result.file}${result.configUpdated ? ' and .juntia/config.yml' : ''}.`);
   log(`${result.file} points to .juntia/context.md — nothing was copied, nothing was sent anywhere.`);
   log(`Safe to delete and regenerate any time with \`juntia integrate ${runtimeName}\`; never hand-edit it.`);
@@ -437,65 +433,6 @@ function formatSetupDetected(result) {
   return ['Detected:', '', ...names.map((n) => `✓ ${n}`)].join('\n');
 }
 
-// Translates a real adapter failure into a plain, actionable sentence
-// instead of the raw error a spawned process can produce (this migration's
-// own explicit example: never surface a bare "spawn claude ENOENT"). Only
-// covers the failure shapes `lib/runtime/claude-cli-adapter.js` actually
-// produces — never invents a friendlier story than what really happened.
-// Shared by `formatInterpretation()` (plain `analyze --explain`) and
-// `runSetup()` — one real failure, one real translation, used everywhere
-// a runtime failure can surface (Phase 13B generalized this from a
-// setup-only helper once `analyze --explain` also needed it).
-function formatRuntimeFailure(synthesis) {
-  const reason = synthesis.reason || '';
-  if (reason.includes('binary_not_found')) {
-    return 'Claude Code is configured but unavailable. Install Claude Code or choose another assistant.';
-  }
-  if (reason.includes('timeout')) {
-    return 'Claude Code took too long to respond, so the interpretation step was skipped this time.';
-  }
-  if (reason.includes('failed validation')) {
-    return 'Claude Code responded, but its answer could not be trusted as-is, so it was discarded.';
-  }
-  return `AI interpretation skipped (${reason}).`;
-}
-
-// Reads .juntia/config.yml's `runtime.provider`, resolves it to a real
-// adapter via lib/runtime/provider-registry.js, and never guesses when it
-// can't (Phase 13B's own central fix — previously, every caller silently
-// defaulted to the Claude CLI adapter regardless of configuration). Returns
-// { ok: true, provider, adapter, label } or
-// { ok: false, provider: string|null, reason }: `provider` is `null` only
-// when nothing is configured at all, distinct from a real but unsupported
-// value (a real, if unusable, provider name is still worth reporting back).
-function resolveConfiguredAdapter(projectRoot) {
-  const configText = readConfigText(projectRoot);
-  const provider = configText ? readRuntimeProvider(configText) : null;
-  if (!provider) {
-    return { ok: false, provider: null, reason: 'no AI assistant configured yet' };
-  }
-  const resolved = resolveProvider(provider);
-  if (!resolved.ok) {
-    return { ok: false, provider, reason: resolved.reason };
-  }
-  return {
-    ok: true, provider, adapter: resolved.adapter, label: resolved.label,
-  };
-}
-
-// The plain, user-facing message for `analyze --explain` when no adapter
-// was injected (a real run, not a test) and configuration resolution
-// failed — either nothing is configured yet, or what's configured isn't
-// something Juntia can use. Distinguishes the two rather than printing one
-// generic error, per this phase's own explicit "informar claramente si
-// falta configuración."
-function formatUnresolvedRuntime(resolution) {
-  if (!resolution.provider) {
-    return 'No AI assistant configured yet — run `juntia setup` or `juntia integrate <runtime>` first, then try `analyze --explain` again.';
-  }
-  return `"${resolution.provider}" is configured, but ${resolution.reason}.`;
-}
-
 async function promptForAssistant(prompt) {
   console.log('Which AI assistant do you use?');
   const available = Object.entries(RUNTIME_PROFILES).map(([provider, profile], i) => ({
@@ -510,15 +447,14 @@ async function promptForAssistant(prompt) {
   return match ? match.provider : null;
 }
 
-// setup(projectRoot, { prompt, adapter, adapterOptions }) -> Promise<{
-//   initialized, provider, integrateResult
-// }>
+// setup(projectRoot, { prompt }) -> Promise<{ initialized, provider, integrateResult }>
 // Idempotent by construction: every step it calls (init/saveFacts/
-// detectConflicts/synthesizeContext/runConfirm/writeContext/runIntegrate)
-// was already idempotent before this phase — running `setup` twice re-runs
-// the same safe operations and reports their real, current state, never
-// duplicating a file, a decision, or a pending item.
-async function runSetup(projectRoot = process.cwd(), { prompt = defaultPrompt, adapter = null, adapterOptions } = {}) {
+// detectConflicts/runConfirm/writeContext/runIntegrate) was already
+// idempotent before this phase — running `setup` twice re-runs the same
+// safe operations and reports their real, current state, never duplicating
+// a file, a decision, or a pending item. Phase 13D: no longer calls an AI
+// runtime itself — see phases/13d-ai-handoff-implementation.md.
+async function runSetup(projectRoot = process.cwd(), { prompt = defaultPrompt } = {}) {
   console.log('Welcome to Juntia.');
   console.log('');
 
@@ -545,8 +481,6 @@ async function runSetup(projectRoot = process.cwd(), { prompt = defaultPrompt, a
   const facts = factsFromScanResult(result);
   const previous = loadFacts(projectRoot);
   const isFirstAnalyze = !previous.exists;
-  let diff = { added: [], removed: [], changed: [] };
-  if (previous.exists && !previous.unknown) diff = compareFacts(previous.document.facts, facts);
   saveFacts(projectRoot, facts);
 
   console.log('Generating project understanding...');
@@ -562,40 +496,15 @@ async function runSetup(projectRoot = process.cwd(), { prompt = defaultPrompt, a
     console.log('');
   }
 
-  // 5-6: AI interpretation + confirmation — only when a runtime was already
-  // configured by a PREVIOUS `setup`/`integrate` run, checked before step 8
-  // below chooses one for the first time. Deliberately never calls AI on a
-  // project's very first `setup` run (no runtime is known yet at this
-  // point) — matching this migration's unbroken cost principle that an AI
-  // call is opt-in, never a side effect of a command whose own purpose
-  // (getting started) doesn't itself imply consent to spend anything yet.
-  const resolvedRuntime = resolveConfiguredAdapter(projectRoot);
-  const configuredProvider = resolvedRuntime.provider;
-
-  if (resolvedRuntime.ok) {
-    const runtimeAdapter = adapter || resolvedRuntime.adapter;
-    const { synthesizeContext } = require('../lib/project-intelligence/context-synthesis-bridge.js');
-    const synthesis = await synthesizeContext(facts, diff, {
-      adapter: runtimeAdapter, adapterOptions, decisions: decisionsBeforeConfirm,
-    });
-
-    if (synthesis.ok) {
-      const id = interpretationId(synthesis.result.basedOn);
-      const alreadyDecided = decisionsBeforeConfirm.find((d) => d.id === id);
-      if (alreadyDecided) {
-        console.log(`✓ Already reflected in a confirmed decision: "${alreadyDecided.text}"`);
-        console.log('');
-      } else {
-        upsertPending(projectRoot, synthesis.result);
-        await runConfirm(projectRoot, { prompt });
-      }
-    } else {
-      console.log(formatRuntimeFailure(synthesis));
-      console.log('');
-    }
-  } else if (configuredProvider) {
-    console.log(`"${configuredProvider}" is configured, but ${resolvedRuntime.reason} — skipping this step.`);
-    console.log('');
+  // 5: confirm anything already pending — never generated here (Juntia does
+  // not run AI itself), but if a previous AI Handoff already produced
+  // proposals sitting in .juntia/pending.json (from an earlier `setup` or
+  // `analyze --explain` run, once a human opened their assistant and it
+  // wrote its proposal there), this is where they surface for review.
+  const { items: pendingBeforeConfirm } = normalizePendingItems(projectRoot);
+  if (pendingBeforeConfirm.length > 0) {
+    console.log(`${pendingBeforeConfirm.length} pending interpretation(s) from your AI assistant found — reviewing now.`);
+    await runConfirm(projectRoot, { prompt });
   }
 
   // 7: context — always refreshed from whatever facts/decisions exist now,
@@ -607,6 +516,8 @@ async function runSetup(projectRoot = process.cwd(), { prompt = defaultPrompt, a
 
   // 8: ask which assistant — skipped (and reported as already-configured)
   // if a previous run already recorded one; never asked twice.
+  const configuredText = readConfigText(projectRoot);
+  const configuredProvider = configuredText ? readRuntimeProvider(configuredText) : null;
   let provider = configuredProvider;
   let justSelectedProvider = false;
   if (!provider) {
@@ -643,8 +554,13 @@ async function runSetup(projectRoot = process.cwd(), { prompt = defaultPrompt, a
     console.log('');
   }
 
-  // 10: done.
+  // 10: done. If an assistant is configured, `integrate` (step 9) already
+  // refreshed .juntia/agent-instructions.md — point the user at it as the
+  // real next action, same handoff `analyze --explain` offers on its own.
   console.log('Juntia is ready.');
+  if (integrateResult && integrateResult.ok) {
+    console.log(`Open ${RUNTIME_PROFILES[provider] ? RUNTIME_PROFILES[provider].label : provider} and ask it to follow .juntia/agent-instructions.md to interpret this project.`);
+  }
 
   return { initialized: !wasInitialized, provider, integrateResult };
 }
@@ -659,11 +575,8 @@ module.exports = {
   runSetup,
   formatAnalysis,
   formatChanges,
-  formatInterpretation,
+  formatHandoffStatus,
   formatSetupDetected,
-  formatRuntimeFailure,
-  formatUnresolvedRuntime,
-  resolveConfiguredAdapter,
   pkgVersion,
   SCAFFOLD_FILES,
 };

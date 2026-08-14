@@ -3,10 +3,14 @@
 // Phase 12K — end-to-end tests for bin/juntia.js's `confirm` and `context`
 // commands, and the full FACT -> INTERPRETATION -> CONFIRMATION -> DECISION
 // -> CONTEXT cycle through the real, wired CLI functions (runAnalyze ->
-// runConfirm -> runContext). A mock adapter stands in for the AI runtime
-// (no live call in this suite, same discipline as test/cli-analyze-
-// explain.test.js); a scripted `prompt` function stands in for a real
-// human at a terminal.
+// runConfirm -> runContext).
+//
+// Redefined by Phase 13D: an interpretation is no longer produced by Juntia
+// calling an AI runtime — it is seeded directly into `.juntia/pending.json`
+// via `upsertPending`, the same way an external AI agent following
+// `.juntia/agent-instructions.md` would after Juntia's own AI Handoff. A
+// scripted `prompt` function still stands in for a real human at a
+// terminal — that part of the flow is unchanged.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -18,7 +22,7 @@ const {
   runAnalyze, runConfirm, runContext,
 } = require('../bin/juntia.js');
 const { loadDecisions } = require('../lib/project-intelligence/decisions-store.js');
-const { loadPending } = require('../lib/project-intelligence/pending-store.js');
+const { loadPending, upsertPending } = require('../lib/project-intelligence/pending-store.js');
 
 function tempProject() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'juntia-confirm-test-'));
@@ -30,10 +34,6 @@ function writeFile(root, relativePath, content) {
   fs.writeFileSync(full, content);
 }
 
-// See test/cli-analyze-explain.test.js's own comment on this same helper:
-// a plain try/finally restores console.log before an async fn's own
-// awaited work actually finishes, letting real output leak to the
-// terminal. Fixed the same way here.
 function silently(fn) {
   const originalLog = console.log;
   console.log = () => {};
@@ -43,16 +43,6 @@ function silently(fn) {
   }
   console.log = originalLog;
   return result;
-}
-
-function mockAdapter(interpretation) {
-  return {
-    interpret: async () => ({
-      ok: true,
-      raw: JSON.stringify(interpretation),
-      durationMs: 200,
-    }),
-  };
 }
 
 function scriptedPrompt(answers) {
@@ -67,16 +57,21 @@ const PHASER_INTERPRETATION = {
   unknowns: [],
 };
 
-async function analyzeAndExplain(root, interpretation) {
+// Simulates the AI Handoff's real result: a real `analyze` run (to persist
+// real facts.json), followed by an external agent's proposal landing in
+// pending.json — exactly what `upsertPending` is for, and exactly the
+// shape `.juntia/agent-instructions.md` documents.
+async function analyzeAndPropose(root, interpretation) {
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.0.0' } }));
-  await silently(() => runAnalyze(root, { explain: true, adapter: mockAdapter(interpretation) }));
+  await silently(() => runAnalyze(root));
+  upsertPending(root, interpretation);
 }
 
-// --- interpretación válida genera pending -----------------------------------
+// --- una propuesta válida está lista para confirmar --------------------------
 
-test('a valid interpretation from analyze --explain is persisted as a real pending item', async () => {
+test('a proposal seeded via the AI Handoff is a real pending item, ready to confirm', async () => {
   const root = tempProject();
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
 
   const { items } = loadPending(root);
   assert.equal(items.length, 1);
@@ -88,7 +83,7 @@ test('a valid interpretation from analyze --explain is persisted as a real pendi
 
 test('confirming a pending interpretation creates a real, persisted decision', async () => {
   const root = tempProject();
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
 
   const result = await silently(() => runConfirm(root, { prompt: scriptedPrompt(['y']) }));
 
@@ -101,7 +96,7 @@ test('confirming a pending interpretation creates a real, persisted decision', a
 
 test('confirming appends a real, human-readable entry to .juntia/DECISIONS.md', async () => {
   const root = tempProject();
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
   await silently(() => runConfirm(root, { prompt: scriptedPrompt(['y']) }));
 
   const narrative = fs.readFileSync(path.join(root, '.juntia', 'DECISIONS.md'), 'utf8');
@@ -112,7 +107,7 @@ test('confirming appends a real, human-readable entry to .juntia/DECISIONS.md', 
 
 test('rejecting a pending interpretation removes it and creates no decision', async () => {
   const root = tempProject();
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
 
   const result = await silently(() => runConfirm(root, { prompt: scriptedPrompt(['n']) }));
 
@@ -125,7 +120,7 @@ test('rejecting a pending interpretation removes it and creates no decision', as
 
 test('a decision keeps its exact original basedOn/confidence even though nothing forces it to stay in sync with a later analyze', async () => {
   const root = tempProject();
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
   await silently(() => runConfirm(root, { prompt: scriptedPrompt(['y']) }));
 
   const before = loadDecisions(root).decisions[0];
@@ -143,16 +138,16 @@ test('a decision keeps its exact original basedOn/confidence even though nothing
 
 // --- IA nunca crea decisiones -------------------------------------------------
 
-test('no decision is ever created by analyze --explain alone, no matter how confident the interpretation — only a real "y" answer to confirm can create one', async () => {
+test('no decision is ever created just by a proposal sitting in pending.json, no matter how confident — only a real "y" answer to confirm can create one', async () => {
   const root = tempProject();
-  await analyzeAndExplain(root, { ...PHASER_INTERPRETATION, confidence: 'high' });
+  await analyzeAndPropose(root, { ...PHASER_INTERPRETATION, confidence: 'high' });
 
-  assert.deepEqual(loadDecisions(root).decisions, [], 'analyze --explain must never write decisions.json by itself');
+  assert.deepEqual(loadDecisions(root).decisions, [], 'a pending proposal alone must never write decisions.json');
 });
 
 test('a "skip" (neither y nor n) answer to confirm leaves the item pending and creates no decision', async () => {
   const root = tempProject();
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
 
   const result = await silently(() => runConfirm(root, { prompt: scriptedPrompt(['maybe later']) }));
 
@@ -166,7 +161,7 @@ test('a "skip" (neither y nor n) answer to confirm leaves the item pending and c
 
 test('a confirmed decision survives running analyze again, even when the underlying facts have not changed', async () => {
   const root = tempProject();
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
   await silently(() => runConfirm(root, { prompt: scriptedPrompt(['y']) }));
 
   await silently(() => runAnalyze(root));
@@ -179,7 +174,7 @@ test('a confirmed decision survives running analyze again, even when the underly
 
 test('removing the dependency a decision was based on flags that decision "conflicted" on the next analyze, without deleting it', async () => {
   const root = tempProject();
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
   await silently(() => runConfirm(root, { prompt: scriptedPrompt(['y']) }));
 
   writeFile(root, 'package.json', JSON.stringify({ dependencies: {} })); // phaser removed
@@ -198,11 +193,11 @@ test('removing the dependency a decision was based on flags that decision "confl
   assert.ok(captured.some((l) => l.includes('needing review')));
 });
 
-// --- pending item grounded in stale facts is not asked about at confirm time -
+// --- pending item grounded in stale/invented facts is not asked about at confirm time -
 
 test('confirm skips (and drops) a pending item whose cited facts no longer exist, without asking the user to confirm it blind', async () => {
   const root = tempProject();
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
 
   writeFile(root, 'package.json', JSON.stringify({ dependencies: {} })); // phaser removed
   await silently(() => runAnalyze(root)); // refresh facts.json, phaser gone
@@ -215,11 +210,62 @@ test('confirm skips (and drops) a pending item whose cited facts no longer exist
   assert.deepEqual(loadPending(root).items, []);
 });
 
+test('confirm rejects a proposal that cites a fact identifier that was never real (an invented/hallucinated citation), without asking', async () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.0.0' } }));
+  await silently(() => runAnalyze(root));
+  upsertPending(root, {
+    interpretation: 'This project uses a real-time multiplayer engine.',
+    confidence: 'high',
+    basedOn: ['dependency:socket.io'], // never a real fact in this project
+    unknowns: [],
+  });
+
+  let promptCalled = false;
+  const result = await silently(() => runConfirm(root, { prompt: async () => { promptCalled = true; return 'y'; } }));
+
+  assert.equal(promptCalled, false);
+  assert.equal(result.stale.length, 1);
+  assert.deepEqual(loadDecisions(root).decisions, []);
+});
+
+test('confirm rejects a malformed proposal (missing required fields), without asking or crashing', async () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.0.0' } }));
+  await silently(() => runAnalyze(root));
+  upsertPending(root, { interpretation: '', confidence: 'medium', basedOn: ['dependency:phaser'], unknowns: [] });
+
+  let promptCalled = false;
+  const result = await silently(() => runConfirm(root, { prompt: async () => { promptCalled = true; return 'y'; } }));
+
+  assert.equal(promptCalled, false);
+  assert.equal(result.stale.length, 1);
+});
+
+// --- una propuesta que ya coincide con una decisión confirmada no vuelve a preguntarse -
+
+test('confirm recognizes a proposal that matches an already-confirmed decision and drops it without asking again', async () => {
+  const root = tempProject();
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
+  await silently(() => runConfirm(root, { prompt: scriptedPrompt(['y']) }));
+
+  // An agent proposes the exact same interpretation again (same basedOn) —
+  // plausible if it did not read .juntia/context.md closely.
+  upsertPending(root, PHASER_INTERPRETATION);
+
+  let promptCalled = false;
+  await silently(() => runConfirm(root, { prompt: async () => { promptCalled = true; return 'y'; } }));
+
+  assert.equal(promptCalled, false, 'must never re-ask about something already confirmed');
+  assert.equal(loadDecisions(root).decisions.length, 1, 'must not create a duplicate decision');
+  assert.deepEqual(loadPending(root).items, []);
+});
+
 // --- contexto generado solo contiene información permitida ------------------
 
 test('juntia context never includes a pending, unconfirmed interpretation — only confirmed facts/decisions', async () => {
   const root = tempProject();
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
   // deliberately never confirmed — still pending
 
   const markdown = silently(() => runContext(root));
@@ -230,7 +276,7 @@ test('juntia context never includes a pending, unconfirmed interpretation — on
 
 test('juntia context includes a real confirmed decision, with its real evidence', async () => {
   const root = tempProject();
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
   await silently(() => runConfirm(root, { prompt: scriptedPrompt(['y']) }));
 
   const markdown = silently(() => runContext(root));
@@ -241,7 +287,7 @@ test('juntia context includes a real confirmed decision, with its real evidence'
 
 test('confirm automatically refreshes .juntia/context.md after a real confirmation, without a separate `juntia context` call', async () => {
   const root = tempProject();
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
   await silently(() => runConfirm(root, { prompt: scriptedPrompt(['y']) }));
 
   const contextPath = path.join(root, '.juntia', 'context.md');
@@ -256,17 +302,4 @@ test('confirm with zero pending items does nothing and does not crash', async ()
 
   const result = await silently(() => runConfirm(root));
   assert.deepEqual(result, { confirmed: [], rejected: [], stale: [] });
-});
-
-// --- analyze --explain does not re-prompt for something already decided ----
-
-test('re-running analyze --explain for the exact same fact set after it was already confirmed does not create a duplicate pending item', async () => {
-  const root = tempProject();
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
-  await silently(() => runConfirm(root, { prompt: scriptedPrompt(['y']) }));
-
-  await analyzeAndExplain(root, PHASER_INTERPRETATION);
-
-  assert.deepEqual(loadPending(root).items, [], 'must not re-queue something already decided');
-  assert.equal(loadDecisions(root).decisions.length, 1);
 });

@@ -11,7 +11,7 @@ const os = require('os');
 const path = require('path');
 
 const {
-  interpretationId, loadPending, savePending, upsertPending, removePending,
+  interpretationId, loadPending, savePending, upsertPending, removePending, normalizePendingItems,
 } = require('../lib/project-intelligence/pending-store.js');
 
 function tempProject() {
@@ -104,6 +104,85 @@ test('a corrupt pending.json is reported as UNKNOWN, never crashes, never silent
   const r = loadPending(root);
   assert.equal(r.unknown, true);
   assert.match(r.reason, /not valid JSON/);
+});
+
+// --- normalizePendingItems (Phase 13D) ---------------------------------------
+//
+// Pending.json can now be written directly by an external AI agent, not
+// only by Juntia's own upsertPending — so an item's own `id` can no longer
+// be assumed present or trustworthy.
+
+test('normalizePendingItems assigns a stable id to an item written without one, matching what interpretationId would compute', () => {
+  const root = tempProject();
+  fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.juntia', 'pending.json'), JSON.stringify({
+    schemaVersion: 1,
+    items: [{ interpretation: 'x', confidence: 'medium', basedOn: ['dependency:phaser'], unknowns: [] }],
+  }));
+
+  const { items } = normalizePendingItems(root);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].id, interpretationId(['dependency:phaser']));
+});
+
+test('normalizePendingItems backfills status/createdAt when an externally-written item omits them', () => {
+  const root = tempProject();
+  fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.juntia', 'pending.json'), JSON.stringify({
+    schemaVersion: 1,
+    items: [{ interpretation: 'x', confidence: 'medium', basedOn: ['dependency:phaser'], unknowns: [] }],
+  }));
+
+  const { items } = normalizePendingItems(root);
+  assert.equal(items[0].status, 'pending');
+  assert.ok(items[0].createdAt);
+});
+
+test('normalizePendingItems disambiguates two distinct items that collide on a missing/blank id', () => {
+  const root = tempProject();
+  fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.juntia', 'pending.json'), JSON.stringify({
+    schemaVersion: 1,
+    items: [
+      { id: '', interpretation: 'a', confidence: 'medium', basedOn: ['dependency:phaser'], unknowns: [] },
+      { id: '', interpretation: 'b', confidence: 'low', basedOn: ['language:TypeScript'], unknowns: [] },
+    ],
+  }));
+
+  const { items } = normalizePendingItems(root);
+  assert.equal(items.length, 2);
+  assert.notEqual(items[0].id, items[1].id);
+});
+
+test('normalizePendingItems persists the assigned ids, so a later removePending(id) call can address the exact item', () => {
+  const root = tempProject();
+  fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.juntia', 'pending.json'), JSON.stringify({
+    schemaVersion: 1,
+    items: [{ interpretation: 'x', confidence: 'medium', basedOn: ['dependency:phaser'], unknowns: [] }],
+  }));
+
+  const { items } = normalizePendingItems(root);
+  removePending(root, items[0].id);
+
+  assert.deepEqual(loadPending(root).items, []);
+});
+
+test('normalizePendingItems leaves an already-well-formed pending.json (from upsertPending) unchanged', () => {
+  const root = tempProject();
+  upsertPending(root, INTERPRETATION);
+  const before = fs.readFileSync(path.join(root, '.juntia', 'pending.json'), 'utf8');
+
+  normalizePendingItems(root);
+
+  assert.equal(fs.readFileSync(path.join(root, '.juntia', 'pending.json'), 'utf8'), before);
+});
+
+test('normalizePendingItems on a project with no pending.json returns an empty, non-crashing result', () => {
+  const root = tempProject();
+  const r = normalizePendingItems(root);
+  assert.equal(r.exists, false);
+  assert.deepEqual(r.items, []);
 });
 
 test('savePending never touches an already-customized .gitignore beyond adding the missing line', () => {

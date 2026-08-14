@@ -8,6 +8,49 @@ All notable changes to `@juntia/juntia` are documented here. Format loosely foll
 
 Nothing yet.
 
+## [0.4.0] - 2026-08-14
+
+The AI Handoff: Juntia no longer executes an AI runtime internally. Closes the real dogfooding finding from
+`restaurant-game` (`analyze --explain` → `spawn("claude") ENOENT`) at its structural root — evaluated
+architecturally first (see `phases/13c-ai-handoff-architecture.md`), implemented this phase.
+
+### Changed
+
+- `juntia analyze --explain` no longer spawns a subprocess or calls any AI runtime. It refreshes
+  `.juntia/agent-instructions.md` — deterministic, generated from the same facts/diff `analyze` already
+  computed — and reports how many interpretations are already pending. No `claude` binary, `PATH`, API key,
+  or model configuration is required for any command to work.
+- `juntia setup` no longer calls an AI runtime either. It reviews whatever proposals are already sitting in
+  `.juntia/pending.json` (written by an external AI agent following the handoff instructions), asks which
+  assistant you use, integrates it, and tells you to open it and follow `.juntia/agent-instructions.md`.
+- `juntia integrate <runtime>` now also generates/refreshes `.juntia/agent-instructions.md` alongside the
+  runtime-specific pointer file (`CLAUDE.md` for Claude Code). The pointer file itself now mentions the
+  handoff file as a guide, without copying its content.
+- `juntia confirm` now validates every pending item — shape, forbidden governance fields, and fact-grounding
+  — before presenting it to a human, since a proposal can now arrive from an external AI agent, not only
+  from Juntia's own (retired) internal call. An invalid or hallucinated proposal is dropped silently, never
+  shown, never confirmable. A proposal that already matches a confirmed decision is recognized and dropped
+  without asking again.
+
+### Added
+
+- `.juntia/agent-instructions.md` (`lib/project-intelligence/agent-handoff.js`, new) — the AI Handoff: a
+  generated, deterministic file explaining to whatever AI agent reads it (Claude Code today) how to
+  interpret the project from the same FACTS Juntia already verified, and where to write its proposal
+  (`.juntia/pending.json`) for Juntia to validate.
+
+### Removed
+
+- `lib/runtime/claude-cli-adapter.js` and `lib/runtime/provider-registry.js` — the internal
+  subprocess-execution mechanism this phase retires. `runtime.provider` in `.juntia/config.yml` keeps its
+  storage and meaning (which assistant you use) but is no longer resolved to an internally-invoked adapter.
+- `context-synthesis-bridge.js`'s `synthesizeContext` (the part that invoked an injected adapter) —
+  `buildRequestText`, the deterministic FACTS/CHANGES/EXISTING CONTEXT renderer, stays and is now reused by
+  `agent-handoff.js`.
+- `resolveConfiguredAdapter`/`formatRuntimeFailure`/`formatUnresolvedRuntime` (bin/juntia.js) and the
+  `adapter`/`adapterOptions` options on `runAnalyze`/`runSetup` — no longer meaningful once nothing in the
+  primary CLI flow calls an adapter.
+
 ## [0.3.0] - 2026-08-14
 
 Two real problems found during this migration's own first real dogfooding, both closed:

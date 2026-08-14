@@ -119,6 +119,37 @@ test('integrate works with no runtime provider configured at all (no config.yml 
   })();
 });
 
+test('integrate generates .juntia/agent-instructions.md alongside the runtime pointer file (Phase 13D)', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
+
+  return (async () => {
+    await silently(() => runAnalyze(root));
+    silently(() => runContext(root));
+    silently(() => runIntegrate('claude-code', root));
+
+    const handoffPath = path.join(root, '.juntia', 'agent-instructions.md');
+    assert.ok(fs.existsSync(handoffPath));
+    const content = fs.readFileSync(handoffPath, 'utf8');
+    assert.match(content, /id:\[dependency:phaser\]/);
+  })();
+});
+
+test('CLAUDE.md points to .juntia/agent-instructions.md as the analysis guide, not a copy of it', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
+
+  return (async () => {
+    await silently(() => runAnalyze(root));
+    silently(() => runContext(root));
+    silently(() => runIntegrate('claude-code', root));
+
+    const claudeMd = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+    assert.match(claudeMd, /agent-instructions\.md/);
+    assert.doesNotMatch(claudeMd, /id:\[dependency:phaser\]/, 'CLAUDE.md must point at the handoff file, never copy its content');
+  })();
+});
+
 test('context.md remains valid (parses/reads the same) after integrate runs', () => {
   const root = tempProject();
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));

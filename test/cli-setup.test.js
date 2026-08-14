@@ -2,12 +2,17 @@
 
 // Phase 13A — tests for bin/juntia.js's `setup` command: the Setup
 // Orchestrator. Every real operation it coordinates (init/analyze/facts/
-// explain/confirm/context/integrate) is already covered by its own test
-// file — this file focuses on what the orchestrator itself adds:
-// sequencing, idempotency, the assistant-selection prompt, and
-// user-facing error messages. A mock adapter and a scripted prompt stand
-// in for the AI runtime and a real human, same discipline as
-// test/cli-confirm-context.test.js.
+// confirm/context/integrate) is already covered by its own test file — this
+// file focuses on what the orchestrator itself adds: sequencing,
+// idempotency, the assistant-selection prompt, and user-facing messages.
+//
+// Redefined by Phase 13D: `setup` no longer calls an AI runtime itself (no
+// adapter parameter exists anymore) — its own role in the AI Handoff is to
+// review whatever proposals are already sitting in `.juntia/pending.json`
+// (seeded directly via `upsertPending`, standing in for what an external AI
+// agent would have written) and to point the user at their configured
+// assistant once one is set up. A scripted `prompt` function stands in for
+// a real human, same discipline as before.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -16,10 +21,10 @@ const os = require('os');
 const path = require('path');
 
 const {
-  runSetup, runInit, formatSetupDetected, formatRuntimeFailure,
+  runSetup, runInit, formatSetupDetected,
 } = require('../bin/juntia.js');
 const { loadDecisions } = require('../lib/project-intelligence/decisions-store.js');
-const { loadPending } = require('../lib/project-intelligence/pending-store.js');
+const { loadPending, upsertPending } = require('../lib/project-intelligence/pending-store.js');
 const { readRuntimeProvider, parseIntegrationsBlock } = require('../lib/project-intelligence/agent-integration.js');
 
 function tempProject() {
@@ -53,16 +58,6 @@ async function captureLog(fn) {
     console.log = originalLog;
   }
   return { output: captured };
-}
-
-function mockAdapter(interpretation) {
-  return {
-    interpret: async () => ({ ok: true, raw: JSON.stringify(interpretation), durationMs: 100 }),
-  };
-}
-
-function failingAdapter(error, message) {
-  return { interpret: async () => ({ ok: false, error, message, durationMs: 5 }) };
 }
 
 function scriptedPrompt(answers) {
@@ -121,7 +116,7 @@ test('setup never modifies real project source files', async () => {
 
 // --- runtime selection --------------------------------------------------------
 
-test('choosing "1" (Claude Code) records runtime.provider and creates a real, working CLAUDE.md', async () => {
+test('choosing "1" (Claude Code) records runtime.provider and creates a real, working CLAUDE.md and agent-instructions.md', async () => {
   const root = tempProject();
   writeFile(root, 'package.json', '{}');
 
@@ -133,6 +128,7 @@ test('choosing "1" (Claude Code) records runtime.provider and creates a real, wo
   assert.equal(readRuntimeProvider(configText), 'claude-code');
   assert.deepEqual(parseIntegrationsBlock(configText), ['claude-code']);
   assert.ok(fs.existsSync(path.join(root, 'CLAUDE.md')));
+  assert.ok(fs.existsSync(path.join(root, '.juntia', 'agent-instructions.md')));
 });
 
 test('choosing "0" (skip) leaves runtime.provider unset and creates no integration file', async () => {
@@ -162,6 +158,13 @@ test('the assistant prompt lists planned providers as visibly unavailable, never
   assert.match(output, /Cursor \(coming soon\)/);
 });
 
+test('once an assistant is configured, setup tells the user to open it and follow the handoff instructions', async () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  const { output } = await captureLog(() => runSetup(root, { prompt: scriptedPrompt(['1']) }));
+  assert.match(output, /Open Claude Code and ask it to follow \.juntia\/agent-instructions\.md/);
+});
+
 // --- protecting existing files ------------------------------------------------
 
 test('a pre-existing, real (non-generated) CLAUDE.md is never overwritten by setup', async () => {
@@ -175,32 +178,38 @@ test('a pre-existing, real (non-generated) CLAUDE.md is never overwritten by set
   assert.equal(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), '# Our real team conventions\n\nDo not touch.\n');
 });
 
-// --- absence / failure of the runtime -----------------------------------------
+// --- reviewing what an AI agent already proposed -------------------------------
 
-test('formatRuntimeFailure turns a raw binary_not_found error into a plain, actionable sentence', () => {
-  const msg = formatRuntimeFailure({ reason: 'runtime failure: binary_not_found — spawn claude ENOENT' });
-  assert.equal(msg, 'Claude Code is configured but unavailable. Install Claude Code or choose another assistant.');
-  assert.doesNotMatch(msg, /ENOENT|spawn/);
-});
-
-test('formatRuntimeFailure handles a timeout without leaking raw process detail', () => {
-  const msg = formatRuntimeFailure({ reason: 'runtime failure: timeout — killed after 30000ms' });
-  assert.doesNotMatch(msg, /30000ms|killed/);
-  assert.match(msg, /took too long/);
-});
-
-test('a real runtime failure (binary not found) during the second run\'s explain step is reported in plain language, and setup still finishes', async () => {
+test('setup never calls any AI runtime itself — no adapter option exists, and it completes with no network/subprocess access at all', async () => {
   const root = tempProject();
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
 
-  await silently(() => runSetup(root, { prompt: scriptedPrompt(['1']) })); // configures claude-code
+  const originalExecPath = process.env.CLAUDE_CODE_EXECPATH;
+  const originalPath = process.env.PATH;
+  delete process.env.CLAUDE_CODE_EXECPATH;
+  process.env.PATH = '';
+  try {
+    const { output } = await captureLog(() => runSetup(root, { prompt: scriptedPrompt(['1']) }));
+    assert.match(output, /Juntia is ready/);
+  } finally {
+    if (originalExecPath !== undefined) process.env.CLAUDE_CODE_EXECPATH = originalExecPath;
+    process.env.PATH = originalPath;
+  }
+});
 
-  const adapter = failingAdapter('binary_not_found', 'spawn claude ENOENT');
-  const { output } = await captureLog(() => runSetup(root, { prompt: scriptedPrompt([]), adapter }));
+test('a pending proposal already sitting in pending.json (from a prior AI Handoff) is reviewed during setup, without setup generating it itself', async () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
+  await silently(() => runSetup(root, { prompt: scriptedPrompt(['1']) })); // configure only
 
-  assert.match(output, /Claude Code is configured but unavailable/);
-  assert.doesNotMatch(output, /ENOENT/);
-  assert.match(output, /Juntia is ready/);
+  upsertPending(root, PHASER_INTERPRETATION); // stands in for an external agent's write
+
+  const { output } = await captureLog(() => runSetup(root, { prompt: scriptedPrompt(['y']) }));
+
+  assert.match(output, /pending interpretation\(s\) from your AI assistant found/);
+  const { decisions } = loadDecisions(root);
+  assert.equal(decisions.length, 1);
+  assert.equal(decisions[0].text, PHASER_INTERPRETATION.interpretation);
 });
 
 // --- idempotent second run ----------------------------------------------------
@@ -220,8 +229,7 @@ test('a second run with an already-configured assistant never asks again, and re
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
   await silently(() => runSetup(root, { prompt: scriptedPrompt(['1']) }));
 
-  const adapter = mockAdapter(PHASER_INTERPRETATION);
-  const { output } = await captureLog(() => runSetup(root, { prompt: scriptedPrompt(['y']), adapter }));
+  const { output } = await captureLog(() => runSetup(root, { prompt: scriptedPrompt([]) }));
 
   assert.match(output, /AI assistant already configured: claude-code/);
   assert.doesNotMatch(output, /Which AI assistant do you use\?/);
@@ -234,26 +242,23 @@ test('running setup twice never duplicates the integrations list or the CLAUDE.m
   await silently(() => runSetup(root, { prompt: scriptedPrompt(['1']) }));
   const firstClaude = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
 
-  // claude-code is already configured from the first run, so this second
-  // call's own explain step will fire — a mock adapter is required here to
-  // keep this suite fast/offline (no live call), same as every other test
-  // in this file that runs setup a second time.
-  const adapter = mockAdapter(PHASER_INTERPRETATION);
-  await silently(() => runSetup(root, { prompt: scriptedPrompt(['0']), adapter }));
+  await silently(() => runSetup(root, { prompt: scriptedPrompt(['0']) }));
 
   const configText = fs.readFileSync(path.join(root, '.juntia', 'config.yml'), 'utf8');
   assert.deepEqual(parseIntegrationsBlock(configText), ['claude-code']);
   assert.equal(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), firstClaude);
 });
 
-test('running setup twice with an identical mock interpretation never creates a second, duplicate decision', async () => {
+test('running setup twice with the same proposal seeded each time never creates a second, duplicate decision', async () => {
   const root = tempProject();
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
-  await silently(() => runSetup(root, { prompt: scriptedPrompt(['1']) })); // configure only, no explain yet
+  await silently(() => runSetup(root, { prompt: scriptedPrompt(['1']) })); // configure only, no proposal yet
 
-  const adapter = mockAdapter(PHASER_INTERPRETATION);
-  await silently(() => runSetup(root, { prompt: scriptedPrompt(['y']), adapter })); // explain + confirm
-  await silently(() => runSetup(root, { prompt: scriptedPrompt(['y']), adapter })); // same interpretation again
+  upsertPending(root, PHASER_INTERPRETATION);
+  await silently(() => runSetup(root, { prompt: scriptedPrompt(['y']) })); // reviews + confirms
+
+  upsertPending(root, PHASER_INTERPRETATION); // same interpretation proposed again
+  await silently(() => runSetup(root, { prompt: scriptedPrompt(['y']) }));
 
   const { decisions } = loadDecisions(root);
   assert.equal(decisions.length, 1, 'an identical interpretation (same basedOn) must not create a second decision');
@@ -264,8 +269,8 @@ test('setup never leaves a stray pending item behind once a decision is confirme
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
   await silently(() => runSetup(root, { prompt: scriptedPrompt(['1']) }));
 
-  const adapter = mockAdapter(PHASER_INTERPRETATION);
-  await silently(() => runSetup(root, { prompt: scriptedPrompt(['y']), adapter }));
+  upsertPending(root, PHASER_INTERPRETATION);
+  await silently(() => runSetup(root, { prompt: scriptedPrompt(['y']) }));
 
   assert.deepEqual(loadPending(root).items, []);
 });
@@ -277,8 +282,8 @@ test('context.md is refreshed, not duplicated, and always reflects only confirme
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
   await silently(() => runSetup(root, { prompt: scriptedPrompt(['1']) }));
 
-  const adapter = mockAdapter(PHASER_INTERPRETATION);
-  await silently(() => runSetup(root, { prompt: scriptedPrompt(['y']), adapter }));
+  upsertPending(root, PHASER_INTERPRETATION);
+  await silently(() => runSetup(root, { prompt: scriptedPrompt(['y']) }));
 
   const contextFiles = fs.readdirSync(path.join(root, '.juntia')).filter((f) => f.startsWith('context'));
   assert.deepEqual(contextFiles, ['context.md']);
@@ -293,8 +298,8 @@ test('answering "n" during setup\'s own confirm step rejects the interpretation 
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
   await silently(() => runSetup(root, { prompt: scriptedPrompt(['1']) }));
 
-  const adapter = mockAdapter(PHASER_INTERPRETATION);
-  await silently(() => runSetup(root, { prompt: scriptedPrompt(['n']), adapter }));
+  upsertPending(root, PHASER_INTERPRETATION);
+  await silently(() => runSetup(root, { prompt: scriptedPrompt(['n']) }));
 
   assert.deepEqual(loadDecisions(root).decisions, []);
 });
