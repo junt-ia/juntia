@@ -15,7 +15,7 @@ hide the advanced commands; it coordinates them.
 | `juntia setup` | **Recommended entrypoint.** Coordinates every command below into one onboarding flow: init if needed, analyze, interpret + confirm once a runtime is configured, build context, ask which AI assistant you use, configure that integration. Idempotent; never re-implements the commands it calls. See [`docs/RUNTIME_INTEGRATION.md`](RUNTIME_INTEGRATION.md#the-setup-orchestrator-phase-13a) for the full contract. | **Built** (Phase 13A) | Yes, but only on a run where a runtime was already configured by a previous `setup`/`integrate` — never on a project's very first `setup`. |
 | `juntia init` | Create a project-local `.juntia/` context directory (config, state, decisions, rules, architecture, roles). | **Built** | Never — pure, deterministic filesystem scaffolding. |
 | `juntia analyze` | Print a deterministic inventory of an existing project — languages, declared dependencies, recognized config files, top-level structure, each traceable to real evidence — and persist it as a factual baseline (`.juntia/facts.json`), reporting Added/Removed/Changed against the previous baseline on every run after the first. Also checks any confirmed decisions against the fresh facts and flags (never deletes) ones whose evidence is now missing. See [`docs/PROJECT_INTELLIGENCE.md`](PROJECT_INTELLIGENCE.md) for the full knowledge model. | **Built — inventory + factual memory + conflict check** | Never. Deterministic tier only. |
-| `juntia analyze --explain` | Same scan/persist/diff/conflict-check as plain `analyze`, plus one AI-runtime interpretation of the real facts — printed to the console and saved as a pending item in `.juntia/pending.json`, never as a fact or a decision. See [`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md#the-interpretation-tier-evaluated-phase-12j) for the contract. | **Built** | Yes, opt-in only. Plain `analyze` (no flag) never does this. |
+| `juntia analyze --explain` | Same scan/persist/diff/conflict-check as plain `analyze`, plus one AI-runtime interpretation of the real facts — printed to the console and saved as a pending item in `.juntia/pending.json`, never as a fact or a decision. Reads `.juntia/config.yml`'s `runtime.provider` and resolves the real adapter for it (Phase 13B) — never guesses; reports plainly if nothing is configured or the configured value can't be resolved. See [`docs/RUNTIME_INTEGRATION.md`](RUNTIME_INTEGRATION.md#runtime-resolution-for-project-interpretation-closed-phase-13b) for the contract. | **Built** | Yes, opt-in only, and only once a runtime is configured. Plain `analyze` (no flag) never does this. |
 | `juntia confirm` | Walks through every pending interpretation and asks a real yes/no question. Yes writes a real decision (`.juntia/decisions.json` + a plain-English line appended to `.juntia/DECISIONS.md`) and refreshes `.juntia/context.md`; no discards it. Never runs without a human present to answer. See [`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md#the-decision-tier-built-phase-12k) for the full contract. | **Built** (Phase 12K) | No — asks a human, never the runtime. |
 | `juntia context` | Rebuilds and prints `.juntia/context.md` from confirmed facts and confirmed decisions only — safe to run any time, including with nothing confirmed yet. | **Built** (Phase 12K) | Never — purely mechanical assembly of already-confirmed data. |
 | `juntia update` | Update Juntia's own scaffolded files in a project without destroying real project content the developer has since edited. | **Designed, not built** | Never — same class of operation as `init`, mechanical file sync. |
@@ -40,10 +40,10 @@ npx juntia setup
 ```
 
 One command, coordinating everything below. Detects whether the project is initialized, analyzes it, asks an
-AI runtime for an interpretation (only if a runtime is already configured — never on the very first run, so
-no AI cost is ever spent without a prior, explicit signal of consent), asks for confirmation before anything
-becomes a decision, builds `.juntia/context.md`, asks which AI assistant you use, and configures that
-integration. Idempotent: running it again reports what's already done (`✓ Already initialized`, `✓ Facts
+AI runtime for an interpretation (only if a runtime is already configured, resolved from real
+`.juntia/config.yml` state, never guessed — and never on the very first run, so no AI cost is ever spent
+without a prior, explicit signal of consent), asks for confirmation before anything becomes a decision,
+builds `.juntia/context.md`, asks which AI assistant you use, and configures that integration. Idempotent: running it again reports what's already done (`✓ Already initialized`, `✓ Facts
 updated`, `✓ AI assistant already configured: claude-code`, `✓ CLAUDE.md already configured`) instead of
 repeating work or duplicating a file, a decision, or a pending item. Never overwrites a real, non-Juntia
 `CLAUDE.md` — same protection `integrate` already has, reused directly. A real runtime failure (e.g. Claude
@@ -98,7 +98,14 @@ deliberately does **not**:
 - create a decision (only `juntia confirm`, answered by a real human, can do that);
 - ask a question of its own choosing (`questions` is a structurally forbidden field — see the validator);
 - re-queue something that already has an active, confirmed decision for the same evidence (it says so
-  instead: "This matches an already-confirmed decision...").
+  instead: "This matches an already-confirmed decision...");
+- guess which AI runtime to call (Phase 13B) — an unconfigured or unresolvable `runtime.provider` skips the
+  interpretation step with a plain explanation; facts are still scanned and persisted either way.
+
+A file Juntia itself generated (currently just `CLAUDE.md`, via `integrate`/`setup`) is detected and reported
+as a real fact, but classified `managed.file`, never `structure.file` (Phase 13B) — a diff reads `Added:
+managed.file: CLAUDE.md`, not something implying a human made a new architectural decision. See
+[`docs/PROJECT_INTELLIGENCE.md`](PROJECT_INTELLIGENCE.md#project-files-vs-juntia-managed-infrastructure-phase-13b).
 
 ## Why `update` isn't built yet
 

@@ -166,3 +166,73 @@ test('loadFacts reports UNKNOWN for a facts.json that is valid JSON but not a re
   const result = loadFacts(root);
   assert.equal(result.unknown, true);
 });
+
+// --- Boundary: Juntia-managed infrastructure vs. real project facts (Phase 13B) --
+
+test('a Juntia-generated CLAUDE.md is classified as managed.file, never structure.file — it is not the project\'s own architecture', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  writeFile(root, 'CLAUDE.md', '<!-- juntia:generated -->\n# Claude Code instructions\n');
+
+  const facts = factsFromScanResult(scanProject(root));
+
+  assert.ok(facts.some((f) => f.category === 'managed.file' && f.name === 'CLAUDE.md'));
+  assert.equal(facts.some((f) => f.category === 'structure.file' && f.name === 'CLAUDE.md'), false);
+});
+
+test('a real, human-authored CLAUDE.md (not Juntia-generated) is STILL classified as managed.file — the filename alone is what Juntia recognizes as its own integration point, regardless of who wrote it', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  writeFile(root, 'CLAUDE.md', '# Our real team conventions\n\nNothing to do with Juntia.\n');
+
+  const facts = factsFromScanResult(scanProject(root));
+
+  const claudeMdFact = facts.find((f) => f.name === 'CLAUDE.md');
+  assert.equal(claudeMdFact.category, 'managed.file');
+});
+
+test('a real project file with an unrelated name is never misclassified as managed', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  writeFile(root, 'README.md', '# Real project readme\n');
+
+  const facts = factsFromScanResult(scanProject(root));
+
+  const readmeFact = facts.find((f) => f.name === 'README.md');
+  assert.equal(readmeFact.category, 'structure.file');
+});
+
+test('a diff correctly reports a newly-appeared CLAUDE.md as "managed.file", never as project structure — the exact real bug this phase fixes', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  const before = factsFromScanResult(scanProject(root));
+
+  writeFile(root, 'CLAUDE.md', '<!-- juntia:generated -->\n# Claude Code instructions\n');
+  const after = factsFromScanResult(scanProject(root));
+
+  const diff = compareFacts(before, after);
+  const claudeAdded = diff.added.find((f) => f.name === 'CLAUDE.md');
+  assert.equal(claudeAdded.category, 'managed.file');
+});
+
+test('.juntia/ itself still never contaminates structural facts, managed or otherwise (Phase 12I\'s own guarantee, unaffected by this phase)', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  writeFile(root, 'CLAUDE.md', '<!-- juntia:generated -->\n');
+  saveFacts(root, factsFromScanResult(scanProject(root))); // creates .juntia/facts.json + .gitignore for real
+
+  const facts = factsFromScanResult(scanProject(root)); // second real scan, .juntia/ now exists on disk
+  assert.equal(facts.some((f) => f.name.includes('.juntia')), false);
+});
+
+test('a managed.file fact still carries real evidence, same as every other fact', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  writeFile(root, 'CLAUDE.md', '<!-- juntia:generated -->\n');
+
+  const facts = factsFromScanResult(scanProject(root));
+  const claudeMdFact = facts.find((f) => f.category === 'managed.file');
+
+  assert.ok(claudeMdFact.evidence);
+  assert.ok(claudeMdFact.evidence.source);
+});

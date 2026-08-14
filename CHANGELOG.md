@@ -8,6 +8,30 @@ All notable changes to `@juntia/juntia` are documented here. Format loosely foll
 
 Nothing yet.
 
+## [0.3.0] - 2026-08-14
+
+Two real problems found during this migration's own first real dogfooding, both closed:
+
+### Fixed
+
+- `juntia analyze --explain` (and `setup`'s own explain step) no longer silently defaults to the Claude CLI
+  adapter regardless of configuration. Both now read `.juntia/config.yml`'s `runtime.provider`, resolve the
+  real adapter for it (`lib/runtime/provider-registry.js`, new), and report plainly — never guess — when
+  nothing is configured (`No AI assistant configured yet — run \`juntia setup\`...`) or the configured value
+  isn't a runtime Juntia has an adapter for (`"<name>" is configured, but ...`). A resolved-but-unavailable
+  runtime (e.g. Claude Code not installed) still reports in plain language, not a raw process error — that
+  guarantee is unchanged, now shared by `analyze --explain` too, not just `setup`.
+- A file Juntia itself generates (currently `CLAUDE.md`, via `integrate`/`setup`) is now classified as a
+  `managed.file` fact, never `structure.file` — it's real evidence of something, just not of the project's
+  own architecture. Previously, `juntia analyze` could report `Added: structure.file: CLAUDE.md` as if a
+  human had made a new architectural decision, when a human had actually just run `juntia setup`.
+
+### Added
+
+- `lib/runtime/provider-registry.js` — the real `providerName -> adapter` lookup Phase 12C named as the
+  concrete next step, closing it for the project-interpretation domain (`analyze --explain`). The intent-
+  classification domain (`interpretIntent()`) is unaffected — no CLI command currently drives it directly.
+
 ## [0.2.0] - 2026-08-14
 
 `juntia setup` — the new recommended entrypoint. One command orchestrates the existing capabilities

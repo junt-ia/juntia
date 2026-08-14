@@ -76,6 +76,25 @@ interpretation, if it ever happens, belongs to the AI Assisted tier, not this on
 project returns empty arrays across the board — the honest representation of "genuinely unknown," not a
 guess.
 
+## Project files vs. Juntia-managed infrastructure (Phase 13B)
+
+A real bug found during this migration's own first real dogfooding: a file Juntia itself generates (e.g.
+`CLAUDE.md`, via `juntia integrate`/`setup`) is a real file on disk, so the deterministic scanner correctly
+detected it — but reported it as `structure.file`, indistinguishable from a file the project's own developer
+actually authored. A diff then read `Added: + structure.file: CLAUDE.md`, implying a new architectural
+decision that never happened; a human just ran `juntia setup`.
+
+`lib/project-intelligence/facts-store.js`'s `factsFromScanResult()` now classifies each detected file against
+`RUNTIME_PROFILES` (`lib/project-intelligence/agent-integration.js`'s own single source of truth for which
+filenames a real integration generates — currently just `CLAUDE.md`): a recognized filename becomes a
+`managed.file` fact instead of `structure.file`. Deliberately minimal — no new taxonomy beyond one extra
+category value, derived from data that already existed rather than a new, hand-maintained list. A real,
+human-authored file happening to share that exact filename (e.g. a team's own, non-Juntia `CLAUDE.md`) is
+still classified as `managed.file` — the filename itself, not its authorship or content, is what Juntia
+recognizes as its own integration point; distinguishing "who wrote it" is what the generated-file marker
+(Phase 12L) is for, a separate real mechanism this phase didn't need to touch. `.juntia/` itself needs no
+classification here at all — it's excluded from scanning entirely (Phase 12I), never reaching this point.
+
 ## From facts to knowledge
 
 Turning these deterministic facts into interpreted, then confirmed, knowledge (the AI Assisted and Human

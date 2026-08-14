@@ -16,6 +16,7 @@ const { generateContext, writeContext } = require('../lib/project-intelligence/c
 const {
   integrateRuntime, RUNTIME_PROFILES, PLANNED_PROVIDERS, readRuntimeProvider, withRuntimeProvider,
 } = require('../lib/project-intelligence/agent-integration.js');
+const { resolveProvider } = require('../lib/runtime/provider-registry.js');
 
 const PACKAGE_ROOT = path.join(__dirname, '..');
 const TEMPLATES_DIR = path.join(PACKAGE_ROOT, 'templates');
@@ -157,7 +158,7 @@ function formatInterpretation(synthesis) {
   if (!synthesis.ok) {
     return [
       'AI interpretation: not available.',
-      `Reason: ${synthesis.reason}`,
+      formatRuntimeFailure(synthesis),
       'No file was written and no interpretation was recorded — nothing here is a fact or a decision.',
     ].join('\n');
   }
@@ -231,7 +232,23 @@ async function runAnalyze(projectRoot = process.cwd(), { explain = false, adapte
   if (!explain) return undefined;
 
   console.log('');
-  const runtimeAdapter = adapter || require('../lib/runtime/claude-cli-adapter.js');
+
+  // Phase 13B: never guess which runtime to call. An injected `adapter`
+  // (tests, or a future programmatic caller) always wins; otherwise the
+  // configured provider is resolved for real from .juntia/config.yml — and
+  // if nothing resolves, this returns early with a plain, actionable
+  // message instead of silently defaulting to the Claude CLI adapter the
+  // way every phase before this one did.
+  let runtimeAdapter = adapter;
+  if (!runtimeAdapter) {
+    const resolved = resolveConfiguredAdapter(projectRoot);
+    if (!resolved.ok) {
+      console.log(formatUnresolvedRuntime(resolved));
+      return undefined;
+    }
+    runtimeAdapter = resolved.adapter;
+  }
+
   const { synthesizeContext } = require('../lib/project-intelligence/context-synthesis-bridge.js');
   const synthesis = await synthesizeContext(facts, diff, { adapter: runtimeAdapter, adapterOptions, decisions: existingDecisions });
   console.log(formatInterpretation(synthesis));
@@ -421,14 +438,18 @@ function formatSetupDetected(result) {
 }
 
 // Translates a real adapter failure into a plain, actionable sentence
-// instead of the raw error a spawned process can produce (this phase's own
-// explicit example: never surface a bare "spawn claude ENOENT"). Only
+// instead of the raw error a spawned process can produce (this migration's
+// own explicit example: never surface a bare "spawn claude ENOENT"). Only
 // covers the failure shapes `lib/runtime/claude-cli-adapter.js` actually
 // produces — never invents a friendlier story than what really happened.
-function formatSetupExplainFailure(synthesis) {
+// Shared by `formatInterpretation()` (plain `analyze --explain`) and
+// `runSetup()` — one real failure, one real translation, used everywhere
+// a runtime failure can surface (Phase 13B generalized this from a
+// setup-only helper once `analyze --explain` also needed it).
+function formatRuntimeFailure(synthesis) {
   const reason = synthesis.reason || '';
   if (reason.includes('binary_not_found')) {
-    return 'Claude Code is selected but unavailable. Install Claude Code or choose another assistant.';
+    return 'Claude Code is configured but unavailable. Install Claude Code or choose another assistant.';
   }
   if (reason.includes('timeout')) {
     return 'Claude Code took too long to respond, so the interpretation step was skipped this time.';
@@ -437,6 +458,42 @@ function formatSetupExplainFailure(synthesis) {
     return 'Claude Code responded, but its answer could not be trusted as-is, so it was discarded.';
   }
   return `AI interpretation skipped (${reason}).`;
+}
+
+// Reads .juntia/config.yml's `runtime.provider`, resolves it to a real
+// adapter via lib/runtime/provider-registry.js, and never guesses when it
+// can't (Phase 13B's own central fix — previously, every caller silently
+// defaulted to the Claude CLI adapter regardless of configuration). Returns
+// { ok: true, provider, adapter, label } or
+// { ok: false, provider: string|null, reason }: `provider` is `null` only
+// when nothing is configured at all, distinct from a real but unsupported
+// value (a real, if unusable, provider name is still worth reporting back).
+function resolveConfiguredAdapter(projectRoot) {
+  const configText = readConfigText(projectRoot);
+  const provider = configText ? readRuntimeProvider(configText) : null;
+  if (!provider) {
+    return { ok: false, provider: null, reason: 'no AI assistant configured yet' };
+  }
+  const resolved = resolveProvider(provider);
+  if (!resolved.ok) {
+    return { ok: false, provider, reason: resolved.reason };
+  }
+  return {
+    ok: true, provider, adapter: resolved.adapter, label: resolved.label,
+  };
+}
+
+// The plain, user-facing message for `analyze --explain` when no adapter
+// was injected (a real run, not a test) and configuration resolution
+// failed — either nothing is configured yet, or what's configured isn't
+// something Juntia can use. Distinguishes the two rather than printing one
+// generic error, per this phase's own explicit "informar claramente si
+// falta configuración."
+function formatUnresolvedRuntime(resolution) {
+  if (!resolution.provider) {
+    return 'No AI assistant configured yet — run `juntia setup` or `juntia integrate <runtime>` first, then try `analyze --explain` again.';
+  }
+  return `"${resolution.provider}" is configured, but ${resolution.reason}.`;
 }
 
 async function promptForAssistant(prompt) {
@@ -512,11 +569,11 @@ async function runSetup(projectRoot = process.cwd(), { prompt = defaultPrompt, a
   // point) — matching this migration's unbroken cost principle that an AI
   // call is opt-in, never a side effect of a command whose own purpose
   // (getting started) doesn't itself imply consent to spend anything yet.
-  const configTextBefore = readConfigText(projectRoot);
-  const configuredProvider = configTextBefore ? readRuntimeProvider(configTextBefore) : null;
+  const resolvedRuntime = resolveConfiguredAdapter(projectRoot);
+  const configuredProvider = resolvedRuntime.provider;
 
-  if (configuredProvider === 'claude-code') {
-    const runtimeAdapter = adapter || require('../lib/runtime/claude-cli-adapter.js');
+  if (resolvedRuntime.ok) {
+    const runtimeAdapter = adapter || resolvedRuntime.adapter;
     const { synthesizeContext } = require('../lib/project-intelligence/context-synthesis-bridge.js');
     const synthesis = await synthesizeContext(facts, diff, {
       adapter: runtimeAdapter, adapterOptions, decisions: decisionsBeforeConfirm,
@@ -533,11 +590,11 @@ async function runSetup(projectRoot = process.cwd(), { prompt = defaultPrompt, a
         await runConfirm(projectRoot, { prompt });
       }
     } else {
-      console.log(formatSetupExplainFailure(synthesis));
+      console.log(formatRuntimeFailure(synthesis));
       console.log('');
     }
   } else if (configuredProvider) {
-    console.log(`"${configuredProvider}" is configured, but Juntia doesn't yet know how to use it for interpretation — skipping this step.`);
+    console.log(`"${configuredProvider}" is configured, but ${resolvedRuntime.reason} — skipping this step.`);
     console.log('');
   }
 
@@ -604,7 +661,9 @@ module.exports = {
   formatChanges,
   formatInterpretation,
   formatSetupDetected,
-  formatSetupExplainFailure,
+  formatRuntimeFailure,
+  formatUnresolvedRuntime,
+  resolveConfiguredAdapter,
   pkgVersion,
   SCAFFOLD_FILES,
 };

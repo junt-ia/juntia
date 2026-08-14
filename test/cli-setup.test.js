@@ -16,7 +16,7 @@ const os = require('os');
 const path = require('path');
 
 const {
-  runSetup, runInit, formatSetupDetected, formatSetupExplainFailure,
+  runSetup, runInit, formatSetupDetected, formatRuntimeFailure,
 } = require('../bin/juntia.js');
 const { loadDecisions } = require('../lib/project-intelligence/decisions-store.js');
 const { loadPending } = require('../lib/project-intelligence/pending-store.js');
@@ -177,14 +177,14 @@ test('a pre-existing, real (non-generated) CLAUDE.md is never overwritten by set
 
 // --- absence / failure of the runtime -----------------------------------------
 
-test('formatSetupExplainFailure turns a raw binary_not_found error into a plain, actionable sentence', () => {
-  const msg = formatSetupExplainFailure({ reason: 'runtime failure: binary_not_found — spawn claude ENOENT' });
-  assert.equal(msg, 'Claude Code is selected but unavailable. Install Claude Code or choose another assistant.');
+test('formatRuntimeFailure turns a raw binary_not_found error into a plain, actionable sentence', () => {
+  const msg = formatRuntimeFailure({ reason: 'runtime failure: binary_not_found — spawn claude ENOENT' });
+  assert.equal(msg, 'Claude Code is configured but unavailable. Install Claude Code or choose another assistant.');
   assert.doesNotMatch(msg, /ENOENT|spawn/);
 });
 
-test('formatSetupExplainFailure handles a timeout without leaking raw process detail', () => {
-  const msg = formatSetupExplainFailure({ reason: 'runtime failure: timeout — killed after 30000ms' });
+test('formatRuntimeFailure handles a timeout without leaking raw process detail', () => {
+  const msg = formatRuntimeFailure({ reason: 'runtime failure: timeout — killed after 30000ms' });
   assert.doesNotMatch(msg, /30000ms|killed/);
   assert.match(msg, /took too long/);
 });
@@ -198,7 +198,7 @@ test('a real runtime failure (binary not found) during the second run\'s explain
   const adapter = failingAdapter('binary_not_found', 'spawn claude ENOENT');
   const { output } = await captureLog(() => runSetup(root, { prompt: scriptedPrompt([]), adapter }));
 
-  assert.match(output, /Claude Code is selected but unavailable/);
+  assert.match(output, /Claude Code is configured but unavailable/);
   assert.doesNotMatch(output, /ENOENT/);
   assert.match(output, /Juntia is ready/);
 });

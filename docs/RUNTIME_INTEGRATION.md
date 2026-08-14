@@ -1,9 +1,10 @@
 # Runtime integration boundary
 
 This document defines the boundary between Juntia and any AI coding runtime it integrates with. One real
-integration now exists (`juntia integrate claude-code`, Phase 12L), and one real orchestrator now coordinates
-it into onboarding (`juntia setup`, Phase 13A) — everything else on this page not explicitly marked **built**
-remains design, not implementation.
+integration now exists (`juntia integrate claude-code`, Phase 12L), one real orchestrator coordinates it into
+onboarding (`juntia setup`, Phase 13A), and the configured runtime is now actually resolved and used, not
+assumed (Phase 13B) — everything else on this page not explicitly marked **built** remains design, not
+implementation.
 
 ## Source of truth
 
@@ -150,19 +151,51 @@ bookkeeping line in `config.yml`.
 
 ```yaml
 runtime:
-  provider: null   # which assistant the user said they use (Phase 13A: WRITTEN by `setup`). Still not read back to select an adapter.
+  provider: null   # which assistant the user said they use. WRITTEN by `setup` (13A); READ by `analyze --explain` (13B).
   model: null
 
 integrations: []   # which runtimes have a generated context pointer (Phase 12L). REAL, read/written by `integrate`/`setup`.
 ```
 
-`runtime:` is about *which AI answers a question Juntia asks* — as of Phase 13A, `juntia setup` writes a real
-value here (the assistant the user said they use), but **nothing reads it back** to select an adapter for
-`analyze --explain`'s own AI calls; that remains a distinct, still-unbuilt gap (see the next section).
-Recording a preference and consuming it to route real calls are different claims, and only the first one is
-real today. `integrations:` is about *which external tools Juntia hands context to, unprompted* (built Phase
-12L, also written by `setup`). The two fields stay structurally independent — writing one never implies or
-requires writing the other.
+`runtime:` is about *which AI answers a question Juntia asks*. `juntia setup` writes a real value here (the
+assistant the user said they use) — and as of Phase 13B, `analyze --explain` (and `setup`'s own explain step)
+reads it back for real, to select the actual adapter for that project-interpretation call (see "Runtime
+resolution" below). `integrations:` is about *which external tools Juntia hands context to, unprompted*
+(built Phase 12L, also written by `setup`). The two fields stay structurally independent — writing or reading
+one never implies or requires the other.
+
+## Runtime resolution for project interpretation, closed (Phase 13B)
+
+Phase 13B's own first named problem: "¿cómo sabe Juntia qué runtime debe usar en futuras ejecuciones?" Before
+this phase, `analyze --explain` (and `setup`'s own explain step) silently defaulted to
+`lib/runtime/claude-cli-adapter.js` regardless of `runtime.provider` — the field Phase 13A had just started
+writing was never actually read back. `lib/runtime/provider-registry.js` is the real, minimal
+`providerName -> adapter` lookup Phase 12C named as the concrete next step ("a small provider-name ->
+adapter-module lookup, not a new abstraction") — `resolveProvider('claude-code')` returns the real,
+already-existing adapter module, nothing new built underneath it.
+
+`bin/juntia.js`'s `resolveConfiguredAdapter(projectRoot)` is the one real function both `analyze --explain`
+and `setup` now call whenever no adapter was explicitly injected (tests, or a future programmatic caller,
+still take priority): it reads `runtime.provider`, resolves it, and never guesses when it can't. Three real,
+distinct outcomes, each reported differently:
+
+- **Nothing configured** — `analyze --explain` skips the call entirely: `No AI assistant configured yet — run
+  \`juntia setup\` or \`juntia integrate <runtime>\` first, then try again.` Facts are still scanned and
+  persisted normally; only the interpretation step is skipped.
+- **Configured, but not a runtime Juntia has an adapter for** (a typo, or a real provider name with no real
+  adapter yet — e.g. `codex`) — reported by name, distinct from "nothing configured": `"codex" is configured,
+  but Juntia doesn't have a runtime adapter for "codex" yet — supported: claude-code.`
+- **Configured and resolved, but the real adapter call itself fails** (e.g. Claude Code isn't installed) —
+  the existing `binary_not_found`/`timeout`/validation-failure translations (`formatRuntimeFailure()`, shared
+  between `analyze --explain` and `setup` since this phase) apply exactly as before: `Claude Code is
+  configured but unavailable. Install Claude Code or choose another assistant.` — never a raw `spawn claude
+  ENOENT`.
+
+Deliberately still separate from `lib/intent-runtime-bridge.js`'s own `interpretIntent()` (the intent-
+classification domain, Phase 04/11C) — that function still takes an `adapter` parameter supplied by whoever
+calls it in code, unaffected by this phase, since nothing in the public CLI currently exposes an
+`--explain`-equivalent flow for that domain. Two domains, two adapter-injection stories; only the project-
+interpretation one had a real CLI command depending on it.
 
 ## The provider adapter interface (already real, already built — separate from `integrate`)
 
@@ -184,10 +217,11 @@ injects a hand-constructed mock adapter instead of the real one). `lib/runtime/r
 system prompt sent to whichever adapter is used) is written to be provider-neutral by construction — no
 model name, no vendor terminology, no assumption of conversational memory.
 
-**What's still missing**: nothing selects an adapter from configuration today — `interpretIntent()`'s
-`adapter` parameter is supplied by whoever calls it in code, not read from `runtime.provider`. Neither
-Phase 12L nor Phase 13A closed this gap (each had its own explicit "don't control the model yet" scope
-limit) — it remains the concrete next step named since `phases/12c-runtime-user-experience.md`.
+**What's still missing**: `interpretIntent()`'s own `adapter` parameter is still supplied by whoever calls it
+in code, not read from `runtime.provider` — unlike `analyze --explain`'s own adapter, which Phase 13B did
+close (see "Runtime resolution" above). No CLI command currently drives `interpretIntent()` directly (it's
+reachable only programmatically, via `require('@juntia/juntia').interpretIntent`), which is exactly why this
+gap wasn't the one blocking a real user-facing command the way the project-interpretation one was.
 
 ## When Juntia uses AI at all
 
