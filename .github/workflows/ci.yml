@@ -1,0 +1,90 @@
+name: CI
+
+# Phase 12M — validates every push/PR to main on three fronts: the real
+# test suite, that the published tarball contains exactly what it should
+# (no test/fixture/dev-only files), and that a genuinely external install
+# (a real tarball into a directory with no relationship to this repo, not
+# `npm install .`) actually works — the same distinction Phase 12F's real,
+# manual validation already established (a local-path install can symlink
+# instead of copy; a tarball install cannot).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm install
+      - run: npm test
+
+  package-integrity:
+    name: Package integrity + external install smoke test
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build the real publishable tarball
+        run: npm pack
+
+      - name: Verify the tarball contains no test/fixture/dev-only files
+        run: |
+          set -euo pipefail
+          TARBALL="$(ls juntia-juntia-*.tgz)"
+          echo "Inspecting $TARBALL"
+          tar -tzf "$TARBALL" | tee /tmp/tarball-contents.txt
+          if grep -E '(^|/)(test|fixtures)/' /tmp/tarball-contents.txt; then
+            echo "::error::Tarball contains test/fixture files — files field or .npmignore needs fixing."
+            exit 1
+          fi
+          if grep -E '(^|/)\.github/' /tmp/tarball-contents.txt; then
+            echo "::error::Tarball contains .github/ workflow files — must never be published."
+            exit 1
+          fi
+
+      - name: Install the real tarball into a clean, external directory and smoke-test the CLI
+        run: |
+          set -euo pipefail
+          TARBALL_PATH="$(pwd)/$(ls juntia-juntia-*.tgz)"
+          EXPECTED_VERSION="$(node -p "require('./package.json').version")"
+
+          INSTALL_DIR="$(mktemp -d)"
+          cd "$INSTALL_DIR"
+          npm init -y >/dev/null
+          npm install "$TARBALL_PATH"
+
+          echo "Confirming the installed binary is a real copy, not a symlink back into the source checkout..."
+          REAL_PATH="$(node -e "console.log(require('fs').realpathSync('node_modules/.bin/juntia'))")"
+          case "$REAL_PATH" in
+            "$GITHUB_WORKSPACE"*)
+              echo "::error::Installed binary still resolves into the source checkout — not a real independent install."
+              exit 1
+              ;;
+          esac
+
+          VERSION="$(npx juntia --version)"
+          if [ "$VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "::error::juntia --version printed '$VERSION', expected '$EXPECTED_VERSION'"
+            exit 1
+          fi
+
+          npx juntia init
+          npx juntia analyze
+          test -f .juntia/config.yml
+          test -f .juntia/facts.json
+          echo "External install smoke test passed in $INSTALL_DIR"

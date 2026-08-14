@@ -25,30 +25,34 @@ The short version: **AI interprets. Juntia governs.**
 ## Status
 
 Early development / product bootstrap. A first, real core exists: a deterministic reasoning pipeline
-(product/architecture/engineering analysis, intent classification, a validated runtime-escalation bridge),
-a deterministic project-inventory layer, and a real, installable package — verified end-to-end from a real
-external project, not just this repository's own tests. There is no npm release yet, no runtime integration
-beyond a Claude Code adapter used internally by the bridge, and no documented stability guarantee — treat
-every export as subject to change before a real `1.0.0`.
+(product/architecture/engineering analysis, intent classification, a validated runtime-escalation bridge), a
+full FACT → INTERPRETATION → CONFIRMATION → DECISION → CONTEXT project-memory cycle, a real Claude Code
+integration, and a complete, real CI/release pipeline (`.github/workflows/ci.yml`,
+`.github/workflows/release.yml`) — verified end-to-end against real external projects, not just this
+repository's own tests. **There is no npm release yet** (nothing has been published under `@juntia/juntia`),
+no runtime integration beyond Claude Code, and no documented stability guarantee — treat every export as
+subject to change before a real `1.0.0`. See [`docs/RELEASE.md`](docs/RELEASE.md) for what publishing will
+actually involve and what version numbers will mean once it happens.
 
 ## Installing
 
-Package name: **`@juntia/juntia`**. Not published to npm yet (this is still early development). Once
-published, installation will be:
+Package name: **`@juntia/juntia`**. Not published to npm yet. Once published:
 
 ```
-npm install @juntia/juntia
+npm install -D @juntia/juntia   # recommended: pinned per-project, works the same for every teammate and in CI
+npm install -g @juntia/juntia   # simpler for a quick, single-machine try — not recommended for a real team project
 ```
 
-Until then, install directly from a local clone — this is the exact mechanism verified against a real,
-external project during this phase, not just described:
+See [`docs/RELEASE.md`](docs/RELEASE.md#installing-juntia-local-vs-global-evaluated) for the full local-vs-global
+evaluation. Until a real release exists, install directly from a tarball — this is the exact mechanism
+verified against multiple real, external projects, not just described:
 
 ```
 git clone https://github.com/junt-ia/juntia.git
 cd juntia
 npm pack                                   # builds @juntia/juntia-0.1.0.tgz
 cd /path/to/your/project
-npm install /path/to/juntia/juntia-juntia-0.1.0.tgz
+npm install -D /path/to/juntia/juntia-juntia-0.1.0.tgz
 ```
 
 ## Using it

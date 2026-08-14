@@ -1,0 +1,68 @@
+name: Release
+
+# Phase 12M — publishes @juntia/juntia to npm. Deliberately triggered only
+# by a real GitHub Release being published against a `v*` tag (never on an
+# ordinary push/PR, never on a schedule) — a human explicitly creating a
+# Release in the GitHub UI (or via `gh release create`) is the one
+# irreversible-adjacent action that starts this workflow, matching this
+# migration's own "hard-to-reverse public actions need a deliberate human
+# trigger" discipline. NPM_TOKEN is read only from repository secrets, is
+# never echoed, logged, or written to a file, and is scoped to this one
+# job via the standard npm auth environment variable.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "publish" to confirm a manual re-run of npm publish for the current tag'
+        required: true
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Refuse an unconfirmed manual run
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.confirm != 'publish'
+        run: |
+          echo "::error::Manual run not confirmed — re-run with confirm set to the literal word 'publish'."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: npm install
+      - run: npm test
+
+      - name: Verify package.json's version matches the release tag
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag ($GITHUB_REF_NAME -> $TAG_VERSION) and package.json version ($PKG_VERSION) do not match. Fix one of them before releasing."
+            exit 1
+          fi
+
+      - name: Verify this version was not already published
+        run: |
+          set -euo pipefail
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if npm view "@juntia/juntia@$PKG_VERSION" version >/dev/null 2>&1; then
+            echo "::error::@juntia/juntia@$PKG_VERSION is already on npm — bump the version before re-releasing."
+            exit 1
+          fi
+
+      - name: Publish
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

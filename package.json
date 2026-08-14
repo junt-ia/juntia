@@ -2,10 +2,24 @@
   "name": "@juntia/juntia",
   "version": "0.1.0",
   "description": "Juntia: a project-local intelligence, context, and governance layer for humans and AI coding runtimes.",
+  "keywords": [
+    "ai",
+    "cli",
+    "context",
+    "developer-tools",
+    "claude",
+    "claude-code",
+    "project-intelligence"
+  ],
+  "homepage": "https://github.com/junt-ia/juntia#readme",
+  "bugs": {
+    "url": "https://github.com/junt-ia/juntia/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/junt-ia/juntia.git"
   },
+  "license": "MIT",
   "publishConfig": {
     "access": "public"
   },
@@ -24,7 +38,9 @@
     "bin",
     "lib",
     "templates",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "scripts": {
     "test": "node --test"
