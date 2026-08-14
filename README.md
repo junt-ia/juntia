@@ -24,19 +24,16 @@ The short version: **AI interprets. Juntia governs.**
 
 ## Status
 
-Early development / product bootstrap. A first, real core exists: a deterministic reasoning pipeline
+Beta (0.x). `@juntia/juntia` is a real, published, installable package: a deterministic reasoning pipeline
 (product/architecture/engineering analysis, intent classification, a validated runtime-escalation bridge), a
-full FACT → INTERPRETATION → CONFIRMATION → DECISION → CONTEXT project-memory cycle, a real Claude Code
-integration, and a complete, real CI/release pipeline (`.github/workflows/ci.yml`,
-`.github/workflows/release.yml`) — verified end-to-end against real external projects, not just this
-repository's own tests. **There is no npm release yet** (nothing has been published under `@juntia/juntia`),
-no runtime integration beyond Claude Code, and no documented stability guarantee — treat every export as
-subject to change before a real `1.0.0`. See [`docs/RELEASE.md`](docs/RELEASE.md) for what publishing will
-actually involve and what version numbers will mean once it happens.
+full FACT → INTERPRETATION → CONFIRMATION → DECISION → CONTEXT project-memory cycle, a one-command onboarding
+flow (`juntia setup`), a real Claude Code integration, and a complete, real CI/release pipeline — all
+verified end-to-end against real external projects, not just this repository's own tests. It stays in `0.x`
+deliberately: the user experience is still evolving, real dogfooding beyond this project's own validation
+isn't done yet, and the public API can still change. See [`docs/RELEASE.md`](docs/RELEASE.md) for what
+version numbers mean here and [`CHANGELOG.md`](CHANGELOG.md) for exactly what shipped in each one.
 
 ## Installing
-
-Package name: **`@juntia/juntia`**. Not published to npm yet. Once published:
 
 ```
 npm install -D @juntia/juntia   # recommended: pinned per-project, works the same for every teammate and in CI
@@ -44,18 +41,55 @@ npm install -g @juntia/juntia   # simpler for a quick, single-machine try — no
 ```
 
 See [`docs/RELEASE.md`](docs/RELEASE.md#installing-juntia-local-vs-global-evaluated) for the full local-vs-global
-evaluation. Until a real release exists, install directly from a tarball — this is the exact mechanism
-verified against multiple real, external projects, not just described:
-
-```
-git clone https://github.com/junt-ia/juntia.git
-cd juntia
-npm pack                                   # builds @juntia/juntia-0.1.0.tgz
-cd /path/to/your/project
-npm install -D /path/to/juntia/juntia-juntia-0.1.0.tgz
-```
+evaluation.
 
 ## Using it
+
+```
+npx juntia setup
+```
+
+That's it for getting started — `setup` walks through everything: it initializes the project if needed,
+analyzes it, asks an AI runtime for an interpretation once an assistant is configured (with your confirmation
+before anything is recorded as a decision), builds `.juntia/context.md`, asks which AI assistant you use, and
+configures that integration. Safe to run again any time — it never repeats a step that's already done, and
+never overwrites a real file it didn't create itself.
+
+```
+$ npx juntia setup
+
+Welcome to Juntia.
+
+Initializing project...
+✓ Created .juntia
+
+Analyzing project...
+
+Detected:
+
+✓ TypeScript
+✓ Phaser
+✓ Vite
+
+Generating project understanding...
+✓ Facts generated
+
+✓ Context refreshed
+
+Which AI assistant do you use?
+  1. Claude Code
+> 1
+
+Configuring Claude Code...
+✓ CLAUDE.md created
+✓ Connected project context
+
+Juntia is ready.
+```
+
+### Advanced: the individual commands
+
+`setup` coordinates these — none of them went away, and each is still fully usable and scriptable on its own:
 
 ```
 npx juntia init                 # scaffolds .juntia/ in the current directory
@@ -66,14 +100,13 @@ npx juntia context              # (re)builds .juntia/context.md from confirmed f
 npx juntia integrate claude-code  # generates CLAUDE.md so Claude Code reads that context automatically
 ```
 
-`init`, `analyze`, `confirm`, `context`, and `integrate` are the real commands today. `init` creates a
-`.juntia/` directory (`config.yml`, `PROJECT_STATE.md`, `DECISIONS.md`, `RULES.md`, `ARCHITECTURE.md`,
-`roles/*.md`) in whatever directory you run it from — nothing is read, analyzed, or sent anywhere, and
-running it again never
-overwrites a file that's already there. `analyze` detects languages, declared dependencies, recognized
-config files, and top-level structure — purely mechanical (no AI, no interpretation, no project "type"
-guessed) — and persists what it found to `.juntia/facts.json` (git-ignored by default): the first run
-creates that baseline, every run after that reports what's Added/Removed/Changed since last time.
+`init` creates a `.juntia/` directory (`config.yml`, `PROJECT_STATE.md`, `DECISIONS.md`, `RULES.md`,
+`ARCHITECTURE.md`, `roles/*.md`) in whatever directory you run it from — nothing is read, analyzed, or sent
+anywhere, and running it again never overwrites a file that's already there. `analyze` detects languages,
+declared dependencies, recognized config files, and top-level structure — purely mechanical (no AI, no
+interpretation, no project "type" guessed) — and persists what it found to `.juntia/facts.json`
+(git-ignored by default): the first run creates that baseline, every run after that reports what's
+Added/Removed/Changed since last time.
 
 `--explain` (opt-in only — plain `analyze` never calls an AI runtime or spends anything) sends those same
 real facts to the same authenticated Claude Code CLI session already used for intent interpretation, prints
@@ -109,8 +142,8 @@ const intent = classifyIntent('Quiero que los clientes VIP tengan un descuento d
 
 Only this documented surface is importable — `require('@juntia/juntia/lib/...')` (any internal module) is
 blocked by the package's own `exports` map, not just by convention. See [`lib/index.js`](lib/index.js) for
-the exact exported surface. This is a real, tested API, not a stable one yet — no version has been
-published, and the shape may still change.
+the exact exported surface. This is a real, tested API, not a stable one yet — Juntia is still in `0.x`
+(see [`docs/RELEASE.md`](docs/RELEASE.md#versioning-while-0x)), so the shape may still change.
 
 ## Where this comes from
 

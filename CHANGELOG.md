@@ -8,6 +8,25 @@ All notable changes to `@juntia/juntia` are documented here. Format loosely foll
 
 Nothing yet.
 
+## [0.2.0] - 2026-08-14
+
+`juntia setup` — the new recommended entrypoint. One command orchestrates the existing capabilities
+(init → analyze → explain → confirm → context → integrate) into a single, plain-language onboarding flow,
+so a new user never has to learn what a "fact," "interpretation," "decision," or "integration" is just to
+get a project ready. Every underlying command (`init`/`analyze`/`confirm`/`context`/`integrate`) is unchanged
+and still available directly for anyone who wants the detail or wants to script a specific step.
+
+### Added
+
+- `juntia setup` — detects whether the project is initialized, analyzes it, generates an AI interpretation
+  and asks for confirmation once an assistant is configured, refreshes context, asks which AI assistant you
+  use (Claude Code today; OpenAI Codex/Gemini CLI/Cursor listed as not-yet-available), and configures that
+  integration — idempotent on every re-run, never overwrites a real file it didn't generate, and reports a
+  plain-language message (never a raw process error) if the chosen assistant isn't actually available.
+- `.juntia/config.yml`'s previously-unused `runtime.provider` field is now written by `setup` (and readable
+  via `juntia integrate`'s own internals) as a real record of which assistant you use — not yet consumed to
+  select an adapter for `analyze --explain`'s own AI calls, which remains a separate, still-open gap.
+
 ## [0.1.0] - 2026-08-14
 
 First public release. 0.x — the CLI surface and public API are real and working, but not yet under a

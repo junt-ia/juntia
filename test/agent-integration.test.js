@@ -14,6 +14,7 @@ const path = require('path');
 const {
   RUNTIME_PROFILES, isJuntiaGenerated, buildPointerContent,
   parseIntegrationsBlock, withIntegration, integrateRuntime,
+  readRuntimeProvider, withRuntimeProvider,
 } = require('../lib/project-intelligence/agent-integration.js');
 
 function tempProject() {
@@ -179,4 +180,43 @@ test('works with runtime.provider left at null — integrate never reads or requ
   withRealJuntiaDir(root); // config.yml has runtime.provider: null
   const result = integrateRuntime(root, 'claude-code');
   assert.equal(result.ok, true);
+});
+
+// --- readRuntimeProvider / withRuntimeProvider (Phase 13A) -------------------
+
+test('readRuntimeProvider returns null for the real init template (provider: null)', () => {
+  assert.equal(readRuntimeProvider('runtime:\n  provider: null\n  model: null\n'), null);
+});
+
+test('readRuntimeProvider returns the real, set value', () => {
+  assert.equal(readRuntimeProvider('runtime:\n  provider: claude-code\n  model: null\n'), 'claude-code');
+});
+
+test('readRuntimeProvider returns null when there is no runtime: block at all', () => {
+  assert.equal(readRuntimeProvider('schema_version: 1\n'), null);
+});
+
+test('withRuntimeProvider sets provider while preserving the rest of the runtime: block (e.g. model)', () => {
+  const result = withRuntimeProvider('runtime:\n  provider: null\n  model: null\n', 'claude-code');
+  assert.match(result, /runtime:\n {2}provider: claude-code\n {2}model: null\n/);
+});
+
+test('withRuntimeProvider preserves everything outside the runtime: block untouched', () => {
+  const configText = 'schema_version: 1\n\nruntime:\n  provider: null\n  model: null\n\nintegrations: []\n';
+  const result = withRuntimeProvider(configText, 'claude-code');
+  assert.match(result, /schema_version: 1/);
+  assert.match(result, /integrations: \[\]/);
+  assert.equal(readRuntimeProvider(result), 'claude-code');
+});
+
+test('withRuntimeProvider is idempotent when called twice with the same provider', () => {
+  const once = withRuntimeProvider('runtime:\n  provider: null\n  model: null\n', 'claude-code');
+  const twice = withRuntimeProvider(once, 'claude-code');
+  assert.equal(once, twice);
+});
+
+test('withRuntimeProvider appends a runtime: block when none exists', () => {
+  const result = withRuntimeProvider('schema_version: 1\n', 'claude-code');
+  assert.equal(readRuntimeProvider(result), 'claude-code');
+  assert.match(result, /schema_version: 1/);
 });

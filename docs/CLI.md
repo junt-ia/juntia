@@ -5,8 +5,14 @@ engineering reasoning, validation, the runtime bridge, provider adapters) is int
 using Juntia should never need to invoke one of those directly. See
 [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#public-api-vs-internal-engine) for why that boundary matters.
 
+A second boundary exists *within* this public surface, as of Phase 13A: `setup` is the one **recommended**
+command for a new user — everything else is real, fully-supported, but **advanced**: individually useful for
+scripting a specific step, debugging, or CI, not required reading to get started. `setup` doesn't replace or
+hide the advanced commands; it coordinates them.
+
 | Command | Responsibility | Status | Consumes AI? |
 |---|---|---|---|
+| `juntia setup` | **Recommended entrypoint.** Coordinates every command below into one onboarding flow: init if needed, analyze, interpret + confirm once a runtime is configured, build context, ask which AI assistant you use, configure that integration. Idempotent; never re-implements the commands it calls. See [`docs/RUNTIME_INTEGRATION.md`](RUNTIME_INTEGRATION.md#the-setup-orchestrator-phase-13a) for the full contract. | **Built** (Phase 13A) | Yes, but only on a run where a runtime was already configured by a previous `setup`/`integrate` — never on a project's very first `setup`. |
 | `juntia init` | Create a project-local `.juntia/` context directory (config, state, decisions, rules, architecture, roles). | **Built** | Never — pure, deterministic filesystem scaffolding. |
 | `juntia analyze` | Print a deterministic inventory of an existing project — languages, declared dependencies, recognized config files, top-level structure, each traceable to real evidence — and persist it as a factual baseline (`.juntia/facts.json`), reporting Added/Removed/Changed against the previous baseline on every run after the first. Also checks any confirmed decisions against the fresh facts and flags (never deletes) ones whose evidence is now missing. See [`docs/PROJECT_INTELLIGENCE.md`](PROJECT_INTELLIGENCE.md) for the full knowledge model. | **Built — inventory + factual memory + conflict check** | Never. Deterministic tier only. |
 | `juntia analyze --explain` | Same scan/persist/diff/conflict-check as plain `analyze`, plus one AI-runtime interpretation of the real facts — printed to the console and saved as a pending item in `.juntia/pending.json`, never as a fact or a decision. See [`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md#the-interpretation-tier-evaluated-phase-12j) for the contract. | **Built** | Yes, opt-in only. Plain `analyze` (no flag) never does this. |
@@ -15,15 +21,35 @@ using Juntia should never need to invoke one of those directly. See
 | `juntia update` | Update Juntia's own scaffolded files in a project without destroying real project content the developer has since edited. | **Designed, not built** | Never — same class of operation as `init`, mechanical file sync. |
 | `juntia integrate <runtime>` | Generate a small, runtime-specific pointer file (e.g. `CLAUDE.md` for `claude-code`) at the path that runtime already reads on its own, so it finds `.juntia/context.md` without being told. Records the integration in `.juntia/config.yml`. | **Built** (Phase 12L) — `claude-code` only; others documented, not implemented | Never — no AI call, nothing sent anywhere; pure, deterministic file generation. |
 
-No command beyond these six exists or is planned without new evidence. In particular: no command exposes
+No command beyond these seven exists or is planned without new evidence. In particular: no command exposes
 `classifyIntent`/`analyzeProduct`/`analyzeArchitecture`/`analyzeEngineering`/`interpretIntent` directly —
 those are the internal engine's own functions, reachable programmatically via `require('juntia')` for a
 caller that genuinely needs them, not meant to be typed by a developer at a terminal. A separate `juntia
-explain` command and a monolithic `juntia update` that runs the whole cycle in one step were both evaluated
-and deliberately not built — see
-[`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md#cli-surface-evaluated-not-assumed) for why.
+explain` command was evaluated and deliberately not built (`analyze --explain` already covers it) — see
+[`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md#cli-surface-evaluated-not-assumed) for why. Phase 12K
+also evaluated, and rejected, folding the whole cycle into one atomic command — Phase 13A's `setup` is not a
+reversal of that: it's a *separate*, clearly-interactive command layered on top, never a change to `analyze`
+or any other command's own scriptable behavior. See
+[`docs/RUNTIME_INTEGRATION.md`](RUNTIME_INTEGRATION.md#why-this-is-not-the-monolithic-command-phase-12k-rejected)
+for the distinction.
 
-## The full cycle: analyze → explain → confirm → context → integrate
+## Getting started: `juntia setup`
+
+```
+npx juntia setup
+```
+
+One command, coordinating everything below. Detects whether the project is initialized, analyzes it, asks an
+AI runtime for an interpretation (only if a runtime is already configured — never on the very first run, so
+no AI cost is ever spent without a prior, explicit signal of consent), asks for confirmation before anything
+becomes a decision, builds `.juntia/context.md`, asks which AI assistant you use, and configures that
+integration. Idempotent: running it again reports what's already done (`✓ Already initialized`, `✓ Facts
+updated`, `✓ AI assistant already configured: claude-code`, `✓ CLAUDE.md already configured`) instead of
+repeating work or duplicating a file, a decision, or a pending item. Never overwrites a real, non-Juntia
+`CLAUDE.md` — same protection `integrate` already has, reused directly. A real runtime failure (e.g. Claude
+Code isn't installed) is reported in plain language, never as a raw process error.
+
+## The full cycle underneath: analyze → explain → confirm → context → integrate
 
 ```
 juntia analyze              # facts.json created/updated; conflicts against existing decisions flagged

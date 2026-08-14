@@ -1,8 +1,9 @@
 # Runtime integration boundary
 
 This document defines the boundary between Juntia and any AI coding runtime it integrates with. One real
-integration now exists (`juntia integrate claude-code`, Phase 12L) — everything else on this page not
-explicitly marked **built** remains design, not implementation.
+integration now exists (`juntia integrate claude-code`, Phase 12L), and one real orchestrator now coordinates
+it into onboarding (`juntia setup`, Phase 13A) — everything else on this page not explicitly marked **built**
+remains design, not implementation.
 
 ## Source of truth
 
@@ -92,6 +93,47 @@ left undocumented-as-built specifically because this phase had no equivalent fir
 own conventions the way it did for Claude Code's — building one from general knowledge instead of real,
 observed usage would be exactly the kind of unevidenced guess this migration has avoided since Phase 03.
 
+## The Setup Orchestrator (Phase 13A)
+
+Phase 13A's own central question: can Juntia prepare a whole project for AI-assisted work through one
+command, hiding facts/interpretations/decisions/integrations as internal concepts the user never has to
+learn? `juntia setup` is that command — and structurally, it is *only* a coordinator: it introduces no new
+scanning, persistence, interpretation, confirmation, or file-generation logic of its own. Every real
+operation is the exact same function `analyze`/`confirm`/`context`/`integrate` already call
+(`scanProject()`, `saveFacts()`, `synthesizeContext()`, `recordDecision()`, `generateContext()`,
+`integrateRuntime()`, ...) — `runSetup()` in `bin/juntia.js` only sequences them and owns its own, shorter,
+onboarding-appropriate console output. `runIntegrate()` itself gained one small, backward-compatible
+addition (`{ silent: true }`) specifically so `setup` could reuse it byte-for-byte instead of re-printing or
+re-implementing its safety checks.
+
+The real sequencing decision worth naming: **AI interpretation only runs if a runtime was already configured
+by a *previous* `setup`/`integrate` run** — never on a project's first-ever `setup`. On a first run, the
+assistant question (step 8 of the brief's own numbered flow) comes *after* the point where interpretation
+would happen (step 5) — so the very first `setup` on a new project never spends anything or calls an AI
+runtime the user hasn't even confirmed they use yet. The second run (and every one after) has a known,
+configured runtime, so the interpret → confirm cycle runs for real. This was real, live-validated behavior,
+not just designed: a real project run twice showed exactly this — silence on run one, a genuine AI
+interpretation and confirmation prompt on run two.
+
+Idempotency is inherited, not reimplemented: every step `setup` calls was already safe to re-run before this
+phase existed (`init`'s "never overwrite," `saveFacts`'s baseline-or-diff behavior, `integrateRuntime`'s
+generated-file marker check, `recordDecision`'s per-id upsert). `setup` adds exactly one new idempotency
+concern of its own — skipping the assistant question entirely once `runtime.provider` is already set,
+reporting `✓ AI assistant already configured: claude-code` instead of asking again.
+
+## Why this is not the monolithic command Phase 12K rejected
+
+Phase 12K's own `docs/CONTEXT_SYNTHESIS.md` evaluated, and rejected, folding `analyze` → `confirm` →
+`context` into one atomic command — reasoning that it "would force an interactive confirmation prompt (or a
+silent AI call) inside what might be a scripted/CI `analyze` invocation." `juntia setup` does not reverse
+that conclusion; it satisfies the same concern a different way. `analyze` (and `analyze --explain`,
+`confirm`, `context`, `integrate`) are **completely unchanged** — still exactly as scriptable, non-interactive
+(where they always were), and safe to run in CI as before. `setup` is a new, separate, unambiguously
+interactive command a script would simply never invoke by accident — nothing about any existing command's
+own contract changed to make this possible. The distinction that matters: Phase 12K rejected making one of
+the *existing* commands secretly do more; Phase 13A added a *new*, honestly-named command that does what its
+name says.
+
 ## What Juntia never delegates to a runtime
 
 Per [`docs/VISION.md`](VISION.md)'s governance/interpretation split: a runtime is never handed the authority
@@ -108,17 +150,19 @@ bookkeeping line in `config.yml`.
 
 ```yaml
 runtime:
-  provider: null   # which adapter analyze --explain / a future interpretIntent() escalates to. NOT READ YET.
+  provider: null   # which assistant the user said they use (Phase 13A: WRITTEN by `setup`). Still not read back to select an adapter.
   model: null
 
-integrations: []   # which runtimes have a generated context pointer (Phase 12L). REAL, read/written by `integrate`.
+integrations: []   # which runtimes have a generated context pointer (Phase 12L). REAL, read/written by `integrate`/`setup`.
 ```
 
-`runtime:` is about *which AI answers a question Juntia asks* (still unbuilt — see the next section).
-`integrations:` is about *which external tools Juntia hands context to, unprompted* (built this phase). Phase
-12L's own brief was explicit that this phase must not start controlling the former — `integrate` never reads
-or writes `runtime.provider`, and choosing an AI provider for `analyze --explain` still requires the same
-explicit, per-call adapter injection it always has.
+`runtime:` is about *which AI answers a question Juntia asks* — as of Phase 13A, `juntia setup` writes a real
+value here (the assistant the user said they use), but **nothing reads it back** to select an adapter for
+`analyze --explain`'s own AI calls; that remains a distinct, still-unbuilt gap (see the next section).
+Recording a preference and consuming it to route real calls are different claims, and only the first one is
+real today. `integrations:` is about *which external tools Juntia hands context to, unprompted* (built Phase
+12L, also written by `setup`). The two fields stay structurally independent — writing one never implies or
+requires writing the other.
 
 ## The provider adapter interface (already real, already built — separate from `integrate`)
 
@@ -141,9 +185,9 @@ system prompt sent to whichever adapter is used) is written to be provider-neutr
 model name, no vendor terminology, no assumption of conversational memory.
 
 **What's still missing**: nothing selects an adapter from configuration today — `interpretIntent()`'s
-`adapter` parameter is supplied by whoever calls it in code, not read from `runtime.provider`. Phase 12L
-deliberately did not close this gap either (see its own brief's explicit "la configuración no debe controlar
-el modelo todavía") — it remains the concrete next step named since `phases/12c-runtime-user-experience.md`.
+`adapter` parameter is supplied by whoever calls it in code, not read from `runtime.provider`. Neither
+Phase 12L nor Phase 13A closed this gap (each had its own explicit "don't control the model yet" scope
+limit) — it remains the concrete next step named since `phases/12c-runtime-user-experience.md`.
 
 ## When Juntia uses AI at all
 
@@ -154,6 +198,8 @@ texts). The runtime bridge escalates to an adapter only when the deterministic r
 for mechanical operations (creating files, syncing templates, simple presence checks). `juntia init`,
 `analyze` (without `--explain`), `confirm`, `context`, and `integrate` never call AI, by design — each is a
 deterministic, mechanical operation with one correct answer given its inputs, not an interpretation problem.
+`juntia setup` is the one command whose AI usage is conditional rather than fixed: never on a project's first
+run (no runtime is configured yet to call), for real once one is — see "The Setup Orchestrator" above.
 
 ## Why `update` still isn't built
 

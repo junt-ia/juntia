@@ -13,7 +13,9 @@ const {
   loadDecisions, recordDecision, detectConflicts, markConflicted, appendDecisionNarrative,
 } = require('../lib/project-intelligence/decisions-store.js');
 const { generateContext, writeContext } = require('../lib/project-intelligence/context-generator.js');
-const { integrateRuntime, RUNTIME_PROFILES } = require('../lib/project-intelligence/agent-integration.js');
+const {
+  integrateRuntime, RUNTIME_PROFILES, PLANNED_PROVIDERS, readRuntimeProvider, withRuntimeProvider,
+} = require('../lib/project-intelligence/agent-integration.js');
 
 const PACKAGE_ROOT = path.join(__dirname, '..');
 const TEMPLATES_DIR = path.join(PACKAGE_ROOT, 'templates');
@@ -353,9 +355,16 @@ function runContext(projectRoot = process.cwd()) {
 // lib/project-intelligence/agent-integration.js). `init()` runs first,
 // idempotently, so `.juntia/config.yml` exists to record the integration
 // even on a project that never explicitly ran `juntia init`.
-function runIntegrate(runtimeName, projectRoot = process.cwd()) {
+// `silent` (Phase 13A) lets `runSetup()` reuse this exact function — same
+// safety checks, same file writes, zero duplicated logic — while printing
+// its own, setup-appropriate summary line instead of this command's normal
+// standalone output. Default (false) preserves `juntia integrate`'s own
+// behavior byte-for-byte.
+function runIntegrate(runtimeName, projectRoot = process.cwd(), { silent = false } = {}) {
+  const log = silent ? () => {} : (...args) => console.log(...args);
+
   if (!runtimeName) {
-    console.log(`Usage: juntia integrate <runtime> — supported: ${Object.keys(RUNTIME_PROFILES).join(', ')}`);
+    log(`Usage: juntia integrate <runtime> — supported: ${Object.keys(RUNTIME_PROFILES).join(', ')}`);
     return { ok: false, reason: 'no runtime specified' };
   }
 
@@ -363,14 +372,224 @@ function runIntegrate(runtimeName, projectRoot = process.cwd()) {
   const result = integrateRuntime(projectRoot, runtimeName);
 
   if (!result.ok) {
-    console.log(`Could not integrate: ${result.reason}`);
+    log(`Could not integrate: ${result.reason}`);
     return result;
   }
 
-  console.log(`Created/updated ${result.file}${result.configUpdated ? ' and .juntia/config.yml' : ''}.`);
-  console.log(`${result.file} points to .juntia/context.md — nothing was copied, nothing was sent anywhere.`);
-  console.log(`Safe to delete and regenerate any time with \`juntia integrate ${runtimeName}\`; never hand-edit it.`);
+  log(`Created/updated ${result.file}${result.configUpdated ? ' and .juntia/config.yml' : ''}.`);
+  log(`${result.file} points to .juntia/context.md — nothing was copied, nothing was sent anywhere.`);
+  log(`Safe to delete and regenerate any time with \`juntia integrate ${runtimeName}\`; never hand-edit it.`);
   return result;
+}
+
+// --- Setup Orchestrator (Phase 13A) -----------------------------------------
+//
+// `juntia setup` is the recommended entrypoint for a new user — one command
+// that coordinates every existing capability above (init/analyze/explain/
+// confirm/context/integrate) into a single, plain-language flow, so a
+// developer never needs to learn what a "fact," "interpretation,"
+// "decision," or "integration" is just to get started. Those concepts keep
+// existing and stay real — `juntia analyze`/`confirm`/`context`/`integrate`
+// remain available as advanced, individually-scriptable commands (nothing
+// here removes or hides them) — `setup` only adds a coordinating layer on
+// top, per this phase's own explicit "no duplicar lógica, solo coordinar."
+// Every step below calls the same functions defined earlier in this file or
+// in lib/, unmodified in behavior; this function owns only sequencing and
+// its own, deliberately shorter, onboarding-appropriate console output.
+
+function configPath(projectRoot) {
+  return path.join(projectRoot, '.juntia', 'config.yml');
+}
+
+function readConfigText(projectRoot) {
+  const p = configPath(projectRoot);
+  return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
+}
+
+// A short, flat "what was found" list — deliberately less detailed than
+// `formatAnalysis()`'s own category-by-category breakdown (dependencies/
+// structure/manifests), which stays available via plain `juntia analyze`
+// for anyone who wants the full detail. Onboarding wants a quick, legible
+// summary, not a technical report.
+function formatSetupDetected(result) {
+  const names = [
+    ...result.identity.languages.map((l) => l.name),
+    ...result.identity.technologies.map((t) => t.name),
+  ];
+  if (names.length === 0) return 'Nothing recognized in this directory yet.';
+  return ['Detected:', '', ...names.map((n) => `✓ ${n}`)].join('\n');
+}
+
+// Translates a real adapter failure into a plain, actionable sentence
+// instead of the raw error a spawned process can produce (this phase's own
+// explicit example: never surface a bare "spawn claude ENOENT"). Only
+// covers the failure shapes `lib/runtime/claude-cli-adapter.js` actually
+// produces — never invents a friendlier story than what really happened.
+function formatSetupExplainFailure(synthesis) {
+  const reason = synthesis.reason || '';
+  if (reason.includes('binary_not_found')) {
+    return 'Claude Code is selected but unavailable. Install Claude Code or choose another assistant.';
+  }
+  if (reason.includes('timeout')) {
+    return 'Claude Code took too long to respond, so the interpretation step was skipped this time.';
+  }
+  if (reason.includes('failed validation')) {
+    return 'Claude Code responded, but its answer could not be trusted as-is, so it was discarded.';
+  }
+  return `AI interpretation skipped (${reason}).`;
+}
+
+async function promptForAssistant(prompt) {
+  console.log('Which AI assistant do you use?');
+  const available = Object.entries(RUNTIME_PROFILES).map(([provider, profile], i) => ({
+    key: String(i + 1), provider, label: profile.label,
+  }));
+  for (const choice of available) console.log(`  ${choice.key}. ${choice.label}`);
+  for (const planned of PLANNED_PROVIDERS) console.log(`  -  ${planned.label} (coming soon)`);
+  console.log('  0. Skip for now');
+  const answer = (await prompt('> ')).trim().toLowerCase();
+  if (answer === '0' || answer === '') return null;
+  const match = available.find((c) => c.key === answer || c.label.toLowerCase() === answer);
+  return match ? match.provider : null;
+}
+
+// setup(projectRoot, { prompt, adapter, adapterOptions }) -> Promise<{
+//   initialized, provider, integrateResult
+// }>
+// Idempotent by construction: every step it calls (init/saveFacts/
+// detectConflicts/synthesizeContext/runConfirm/writeContext/runIntegrate)
+// was already idempotent before this phase — running `setup` twice re-runs
+// the same safe operations and reports their real, current state, never
+// duplicating a file, a decision, or a pending item.
+async function runSetup(projectRoot = process.cwd(), { prompt = defaultPrompt, adapter = null, adapterOptions } = {}) {
+  console.log('Welcome to Juntia.');
+  console.log('');
+
+  // 1-2: init if needed (reuses the exact same scaffolding function
+  // `runInit` itself calls — never re-implemented).
+  const wasInitialized = fs.existsSync(configPath(projectRoot));
+  if (!wasInitialized) {
+    console.log('Initializing project...');
+    init(projectRoot);
+    console.log('✓ Created .juntia');
+  } else {
+    console.log('✓ Already initialized');
+  }
+  console.log('');
+
+  // 3-4: analyze -> facts (same scan/persist/diff/conflict-check primitives
+  // runAnalyze() itself uses — reused directly, not re-implemented).
+  console.log('Analyzing project...');
+  const result = scanProject(projectRoot);
+  console.log('');
+  console.log(formatSetupDetected(result));
+  console.log('');
+
+  const facts = factsFromScanResult(result);
+  const previous = loadFacts(projectRoot);
+  const isFirstAnalyze = !previous.exists;
+  let diff = { added: [], removed: [], changed: [] };
+  if (previous.exists && !previous.unknown) diff = compareFacts(previous.document.facts, facts);
+  saveFacts(projectRoot, facts);
+
+  console.log('Generating project understanding...');
+  console.log(isFirstAnalyze ? '✓ Facts generated' : '✓ Facts updated');
+  console.log('');
+
+  const { decisions: decisionsBeforeConfirm } = loadDecisions(projectRoot);
+  const conflicts = detectConflicts(facts, decisionsBeforeConfirm);
+  if (conflicts.length > 0) {
+    markConflicted(projectRoot, conflicts);
+    console.log('Decisions needing review (evidence they were based on no longer exists — not deleted):');
+    for (const c of conflicts) console.log(`  ! "${c.decision.text}" — missing: ${c.missingFacts.join(', ')}`);
+    console.log('');
+  }
+
+  // 5-6: AI interpretation + confirmation — only when a runtime was already
+  // configured by a PREVIOUS `setup`/`integrate` run, checked before step 8
+  // below chooses one for the first time. Deliberately never calls AI on a
+  // project's very first `setup` run (no runtime is known yet at this
+  // point) — matching this migration's unbroken cost principle that an AI
+  // call is opt-in, never a side effect of a command whose own purpose
+  // (getting started) doesn't itself imply consent to spend anything yet.
+  const configTextBefore = readConfigText(projectRoot);
+  const configuredProvider = configTextBefore ? readRuntimeProvider(configTextBefore) : null;
+
+  if (configuredProvider === 'claude-code') {
+    const runtimeAdapter = adapter || require('../lib/runtime/claude-cli-adapter.js');
+    const { synthesizeContext } = require('../lib/project-intelligence/context-synthesis-bridge.js');
+    const synthesis = await synthesizeContext(facts, diff, {
+      adapter: runtimeAdapter, adapterOptions, decisions: decisionsBeforeConfirm,
+    });
+
+    if (synthesis.ok) {
+      const id = interpretationId(synthesis.result.basedOn);
+      const alreadyDecided = decisionsBeforeConfirm.find((d) => d.id === id);
+      if (alreadyDecided) {
+        console.log(`✓ Already reflected in a confirmed decision: "${alreadyDecided.text}"`);
+        console.log('');
+      } else {
+        upsertPending(projectRoot, synthesis.result);
+        await runConfirm(projectRoot, { prompt });
+      }
+    } else {
+      console.log(formatSetupExplainFailure(synthesis));
+      console.log('');
+    }
+  } else if (configuredProvider) {
+    console.log(`"${configuredProvider}" is configured, but Juntia doesn't yet know how to use it for interpretation — skipping this step.`);
+    console.log('');
+  }
+
+  // 7: context — always refreshed from whatever facts/decisions exist now,
+  // same generator `juntia context` itself uses.
+  const { decisions: currentDecisions } = loadDecisions(projectRoot);
+  writeContext(projectRoot, generateContext(facts, currentDecisions));
+  console.log('✓ Context refreshed');
+  console.log('');
+
+  // 8: ask which assistant — skipped (and reported as already-configured)
+  // if a previous run already recorded one; never asked twice.
+  let provider = configuredProvider;
+  let justSelectedProvider = false;
+  if (!provider) {
+    provider = await promptForAssistant(prompt);
+    console.log('');
+    if (provider) {
+      justSelectedProvider = true;
+      const configText = readConfigText(projectRoot) || '';
+      fs.writeFileSync(configPath(projectRoot), withRuntimeProvider(configText, provider));
+    } else {
+      console.log('No assistant selected — run `juntia integrate <runtime>` any time you\'re ready.');
+      console.log('');
+    }
+  } else {
+    console.log(`✓ AI assistant already configured: ${configuredProvider}`);
+    console.log('');
+  }
+
+  // 9: integrate — reuses runIntegrate() exactly (same safety checks,
+  // same file protection for a real, non-Juntia CLAUDE.md), silenced so
+  // setup can report its own, idempotency-aware summary line instead of
+  // that command's own standalone output.
+  let integrateResult = null;
+  if (provider) {
+    const label = RUNTIME_PROFILES[provider] ? RUNTIME_PROFILES[provider].label : provider;
+    console.log(`Configuring ${label}...`);
+    integrateResult = runIntegrate(provider, projectRoot, { silent: true });
+    if (integrateResult.ok) {
+      console.log(`✓ ${integrateResult.file} ${justSelectedProvider ? 'created' : 'already configured'}`);
+      console.log('✓ Connected project context');
+    } else {
+      console.log(`Could not configure ${label}: ${integrateResult.reason}`);
+    }
+    console.log('');
+  }
+
+  // 10: done.
+  console.log('Juntia is ready.');
+
+  return { initialized: !wasInitialized, provider, integrateResult };
 }
 
 module.exports = {
@@ -380,9 +599,12 @@ module.exports = {
   runConfirm,
   runContext,
   runIntegrate,
+  runSetup,
   formatAnalysis,
   formatChanges,
   formatInterpretation,
+  formatSetupDetected,
+  formatSetupExplainFailure,
   pkgVersion,
   SCAFFOLD_FILES,
 };
@@ -391,7 +613,10 @@ module.exports = {
 // command as a side effect (same convention as claude-toolkit's own bin/claude-toolkit.js).
 if (require.main === module) {
   const command = process.argv[2];
-  if (command === 'init') runInit();
+  if (command === 'setup') {
+    runSetup(process.cwd())
+      .catch((err) => { console.error(`setup failed: ${err.message}`); process.exit(1); });
+  } else if (command === 'init') runInit();
   else if (command === 'analyze') {
     runAnalyze(process.cwd(), { explain: process.argv.includes('--explain') })
       .catch((err) => { console.error(`analyze failed: ${err.message}`); process.exit(1); });
@@ -402,7 +627,8 @@ if (require.main === module) {
   else if (command === 'integrate') runIntegrate(process.argv[3]);
   else if (command === '--version' || command === '-v') console.log(pkgVersion());
   else {
-    console.error('Usage: juntia <init|analyze [--explain]|confirm|context|integrate <runtime>>');
+    console.error('Usage: juntia <setup|init|analyze [--explain]|confirm|context|integrate <runtime>>');
+    console.error('New to Juntia? Run `juntia setup` — it walks through everything for you.');
     process.exit(1);
   }
 }

@@ -1,20 +1,23 @@
 # Juntia project configuration.
 #
-# Nothing in this file is read by any code yet. `juntia init` scaffolds it so a
-# project has one canonical place for Juntia settings as real functionality is
-# added in a future phase, instead of that shape being invented later under time
-# pressure.
+# `juntia init` scaffolds this so a project has one canonical place for
+# Juntia settings. `juntia setup`/`juntia integrate` read and write the
+# `runtime.provider` and `integrations` fields below (Phase 13A/12L) — every
+# other field is still reserved for a future phase, not yet read by any code.
 
 schema_version: 1
 
 project:
   name: null # fill in; not required by anything yet
 
-# Which provider the internal engine escalates to when a request is
-# genuinely ambiguous (see docs/RUNTIME_INTEGRATION.md's "provider adapter
-# interface" — the interface already exists in code; nothing reads this
-# block to select a provider yet). One provider at a time, unlike
-# `integrations` below. Examples (illustrative, not all implemented):
+# Which AI assistant you told `juntia setup` (or manually configured via
+# `juntia integrate <runtime>`) you use — a record of your stated
+# preference, not yet a routing mechanism: nothing in this codebase reads
+# this value back to select which adapter `analyze --explain` actually
+# calls (that's a separate, still-unbuilt gap — see docs/
+# RUNTIME_INTEGRATION.md's "provider adapter interface" section). One
+# provider at a time, unlike `integrations` below. Examples (illustrative,
+# not all implemented):
 #   runtime:
 #     provider: claude-code
 #   runtime:
@@ -27,10 +30,9 @@ runtime:
   provider: null
   model: null
 
-# Which AI coding runtimes this project has generated an adaptation for (see
-# docs/RUNTIME_INTEGRATION.md) — e.g. a generated .claude/CLAUDE.md counts as
+# Which AI coding runtimes this project has a generated adaptation for (see
+# docs/RUNTIME_INTEGRATION.md) — e.g. a generated CLAUDE.md counts as
 # "claude-code" here. Distinct from `runtime` above: a project can integrate
-# with several runtimes at once, but the internal engine escalates to only
-# one at a time. Empty until `juntia integrate <runtime>` exists — not built
-# yet.
+# with several runtimes at once, but `runtime.provider` only ever names one.
+# Written by `juntia setup` or `juntia integrate <runtime>`.
 integrations: []
