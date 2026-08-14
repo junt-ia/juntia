@@ -6,7 +6,13 @@ All notable changes to `@juntia/juntia` are documented here. Format loosely foll
 
 ## [Unreleased]
 
-Not yet published to npm — see `docs/RELEASE.md` for what "publish" will mean once it happens.
+Nothing yet.
+
+## [0.1.0] - 2026-08-14
+
+First public release. 0.x — the CLI surface and public API are real and working, but not yet under a
+stability guarantee; see [`docs/RELEASE.md`](docs/RELEASE.md#versioning-while-0x) for what that means in
+practice.
 
 ### Added
 
@@ -25,7 +31,3 @@ Not yet published to npm — see `docs/RELEASE.md` for what "publish" will mean 
   `analyzeArchitecture`, `analyzeEngineering`, `interpretIntent`.
 - A protected internal/public boundary enforced by `package.json`'s `exports` map — a deep `require()` into
   internal reasoning modules throws, by design.
-
-## [0.1.0] - Unreleased
-
-Initial development version. Not yet published — see `[Unreleased]` above for its actual contents.
