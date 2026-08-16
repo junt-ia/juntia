@@ -20,6 +20,7 @@ const {
 } = require('../lib/project-intelligence/agent-integration.js');
 const { HANDOFF_FILE, buildHandoffInstructions, writeHandoffInstructions } = require('../lib/project-intelligence/agent-handoff.js');
 const { validateProjectInterpretation } = require('../lib/runtime/project-interpretation-validator.js');
+const { validateDecisionRequest } = require('../lib/governance/decision-model.js');
 const { routeWorkflow } = require('../lib/governance/workflow-router.js');
 const { buildAgentContext } = require('../lib/governance/agent-context.js');
 const { TASK_HANDOFF_FILE, buildTaskHandoff, writeTaskHandoff } = require('../lib/governance/task-handoff.js');
@@ -57,6 +58,13 @@ const SCAFFOLD_FILES = [
   path.join('governance', 'roles', 'engineer.md'),
   path.join('governance', 'roles', 'qa.md'),
   path.join('governance', 'rules', 'agent-rules.md'),
+  // Phase 15G: a small, curated catalog of situations that commonly signal
+  // a real decision — read, never executed (see decision-triggers.js).
+  path.join('governance', 'rules', 'decision-triggers.md'),
+  // Governance Level Dynamic: a small, curated catalog of declarable
+  // signals that adjust a workflow's governance level up or down — read,
+  // never matched against a request's text (see governance-signals.js).
+  path.join('governance', 'rules', 'governance-signals.md'),
   path.join('governance', 'workflows', 'feature-development.md'),
   path.join('governance', 'workflows', 'bug-fix.md'),
   path.join('governance', 'workflows', 'investigation.md'),
@@ -66,6 +74,15 @@ const SCAFFOLD_FILES = [
   path.join('governance', 'skills', 'architecture-review', 'SKILL.md'),
   path.join('governance', 'skills', 'implementation', 'SKILL.md'),
   path.join('governance', 'skills', 'testing-strategy', 'SKILL.md'),
+  // Phase 15F: real, evidenced additions (see decision-model.js), not a
+  // library expansion for its own sake — one per role that actually
+  // escalates a decision (product, architect).
+  path.join('governance', 'skills', 'product-decision-making', 'SKILL.md'),
+  path.join('governance', 'skills', 'architecture-decision-record', 'SKILL.md'),
+  // Phase 15G: the real, distinct pre-implementation gate the restaurant-
+  // game evidence found missing — see governance-review/SKILL.md's own
+  // header for why this isn't redundant with the two skills above.
+  path.join('governance', 'skills', 'governance-review', 'SKILL.md'),
   path.join('governance', 'conventions', 'README.md'),
 ];
 
@@ -287,7 +304,7 @@ async function runConfirm(projectRoot = process.cwd(), { prompt = defaultPrompt 
     return { confirmed: [], rejected: [], stale: [] };
   }
   if (pending.items.length === 0) {
-    console.log('No pending interpretations to confirm.');
+    console.log('No pending items to confirm.');
     return { confirmed: [], rejected: [], stale: [] };
   }
 
@@ -301,6 +318,55 @@ async function runConfirm(projectRoot = process.cwd(), { prompt = defaultPrompt 
   const stale = [];
 
   for (const item of pending.items) {
+    // Phase 15F: a decision request (type "product"/"architecture") is a
+    // structurally different question — "what should this be," never "what
+    // does the evidence suggest is true" — and takes a completely separate
+    // path: no fact-grounding check applies (there is no fact to ground it
+    // in), and the human's own free-text answer, never anything the agent
+    // proposed, becomes the decision. This is the one place in this
+    // codebase that structurally guarantees "un agente nunca debe
+    // autoaprobar sus propias decisiones": `validateDecisionRequest` already
+    // rejected any proposal that tried to set its own answer, and the only
+    // way this loop ever calls `recordDecision` for one is with `answer`
+    // freshly typed by whoever is running `confirm` right now.
+    if (item.type === 'product' || item.type === 'architecture') {
+      // eslint-disable-next-line no-await-in-loop
+      const decisionValidation = validateDecisionRequest(item);
+      if (!decisionValidation.valid) {
+        console.log('');
+        console.log(`Skipping a pending decision request — invalid (${decisionValidation.errors.join('; ')}).`);
+        removePending(projectRoot, item.id);
+        stale.push(item.id);
+        continue;
+      }
+
+      console.log('');
+      console.log(`[${item.type} decision] ${item.question}`);
+      if (item.context) console.log(`  context: ${item.context}`);
+      if (Array.isArray(item.options) && item.options.length > 0) console.log(`  options: ${item.options.join(', ')}`);
+      // eslint-disable-next-line no-await-in-loop
+      const decisionAnswer = (await prompt('Your decision (or "skip"/"reject"): ')).trim();
+      const normalizedAnswer = decisionAnswer.toLowerCase();
+
+      if (normalizedAnswer === '' || normalizedAnswer === 'skip') {
+        console.log('  Skipped for now — still pending, ask again later with `juntia confirm`.');
+        continue;
+      }
+      if (normalizedAnswer === 'reject') {
+        removePending(projectRoot, item.id);
+        rejected.push(item.id);
+        console.log('  Discarded — no decision recorded.');
+        continue;
+      }
+
+      const decision = recordDecision(projectRoot, item, decisionAnswer);
+      appendDecisionNarrative(projectRoot, decision);
+      removePending(projectRoot, item.id);
+      confirmed.push(decision.id);
+      console.log('  Recorded as a decision.');
+      continue;
+    }
+
     // Every pending item is now untrusted input until proven otherwise — it
     // may have come from Juntia's own (retired) internal path, or directly
     // from an external AI agent following .juntia/agent-instructions.md, and
@@ -467,14 +533,19 @@ function runIntegrate(runtimeName, projectRoot = process.cwd(), { silent = false
 // the human/agent-facing presentation changed. `.juntia/BOOTSTRAP.md` is
 // refreshed regardless of outcome, so it always reflects whether a task
 // handoff currently exists.
-function runRoute(text, projectRoot = process.cwd()) {
+//
+// Governance Level Dynamic — `signals` is a caller-declared array of signal
+// names (see `governance-signals.js`); the CLI's own `--signal <name>` flag
+// (repeatable) is how a human or an external agent supplies it. With no
+// signals declared, behavior is byte-identical to before this addition.
+function runRoute(text, projectRoot = process.cwd(), { signals = [] } = {}) {
   if (!text || !text.trim()) {
-    console.log('Usage: juntia route "<what you want to do>"');
+    console.log('Usage: juntia route "<what you want to do>" [--signal <name>]...');
     return { ok: false, reason: 'no request text given' };
   }
 
   init(projectRoot);
-  const route = routeWorkflow(text, projectRoot);
+  const route = routeWorkflow(text, projectRoot, { signals });
   const agentContext = buildAgentContext(route);
   console.log(JSON.stringify(agentContext, null, 2));
 
@@ -699,10 +770,22 @@ if (require.main === module) {
       .catch((err) => { console.error(`confirm failed: ${err.message}`); process.exit(1); });
   } else if (command === 'context') runContext(process.cwd());
   else if (command === 'integrate') runIntegrate(process.argv[3]);
-  else if (command === 'route') runRoute(process.argv.slice(3).join(' '));
-  else if (command === '--version' || command === '-v') console.log(pkgVersion());
+  else if (command === 'route') {
+    const rest = process.argv.slice(3);
+    const signals = [];
+    const textParts = [];
+    for (let i = 0; i < rest.length; i += 1) {
+      if (rest[i] === '--signal') {
+        i += 1;
+        if (rest[i] !== undefined) signals.push(rest[i]);
+      } else {
+        textParts.push(rest[i]);
+      }
+    }
+    runRoute(textParts.join(' '), process.cwd(), { signals });
+  } else if (command === '--version' || command === '-v') console.log(pkgVersion());
   else {
-    console.error('Usage: juntia <setup|init|analyze [--explain]|confirm|context|integrate <runtime>|route "<request>">');
+    console.error('Usage: juntia <setup|init|analyze [--explain]|confirm|context|integrate <runtime>|route "<request>" [--signal <name>]...>');
     console.error('New to Juntia? Run `juntia setup` — it walks through everything for you.');
     process.exit(1);
   }

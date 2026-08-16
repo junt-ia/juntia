@@ -22,7 +22,7 @@ const {
   runAnalyze, runConfirm, runContext,
 } = require('../bin/juntia.js');
 const { loadDecisions } = require('../lib/project-intelligence/decisions-store.js');
-const { loadPending, upsertPending } = require('../lib/project-intelligence/pending-store.js');
+const { loadPending, upsertPending, upsertDecisionRequest } = require('../lib/project-intelligence/pending-store.js');
 
 function tempProject() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'juntia-confirm-test-'));
@@ -302,4 +302,123 @@ test('confirm with zero pending items does nothing and does not crash', async ()
 
   const result = await silently(() => runConfirm(root));
   assert.deepEqual(result, { confirmed: [], rejected: [], stale: [] });
+});
+
+// --- Phase 15F: product/architecture decision requests through the real,
+// wired `confirm` CLI — the real restaurant-game M04 scenario this phase is
+// grounded in (a wait-timeout duration with no fact to cite).
+
+const WAIT_TIMEOUT_REQUEST = {
+  type: 'product',
+  question: '¿Cuánto tiempo espera un cliente antes de abandonar?',
+  context: 'NPC waiting system',
+  options: ['10000ms', '15000ms', '20000ms'],
+};
+
+test('a human\'s real, free-text answer to a decision request creates a real, persisted decision — never anything the request itself proposed', async () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  await silently(() => runAnalyze(root));
+  upsertDecisionRequest(root, WAIT_TIMEOUT_REQUEST);
+
+  const result = await silently(() => runConfirm(root, { prompt: scriptedPrompt(['15000ms']) }));
+
+  assert.equal(result.confirmed.length, 1);
+  const { decisions } = loadDecisions(root);
+  assert.equal(decisions.length, 1);
+  assert.equal(decisions[0].type, 'product');
+  assert.equal(decisions[0].text, '15000ms');
+  assert.equal(decisions[0].source, 'human');
+});
+
+test('an AI agent can never self-approve a decision request — the pending item never carries the answer, only confirm\'s own human-typed input does', async () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  await silently(() => runAnalyze(root));
+  upsertDecisionRequest(root, WAIT_TIMEOUT_REQUEST);
+
+  // The item sitting in pending.json — exactly what an agent could have
+  // written — structurally has no answer field at all to smuggle one in.
+  const { items } = loadPending(root);
+  assert.equal(items[0].text, undefined);
+  assert.equal(items[0].decision, undefined);
+});
+
+test('"skip" leaves a decision request pending, creating no decision', async () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  await silently(() => runAnalyze(root));
+  upsertDecisionRequest(root, WAIT_TIMEOUT_REQUEST);
+
+  const result = await silently(() => runConfirm(root, { prompt: scriptedPrompt(['skip']) }));
+
+  assert.deepEqual(result.confirmed, []);
+  assert.equal(loadPending(root).items.length, 1);
+  assert.deepEqual(loadDecisions(root).decisions, []);
+});
+
+test('"reject" discards a decision request entirely — no longer pending, no decision created', async () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  await silently(() => runAnalyze(root));
+  upsertDecisionRequest(root, WAIT_TIMEOUT_REQUEST);
+
+  const result = await silently(() => runConfirm(root, { prompt: scriptedPrompt(['reject']) }));
+
+  assert.deepEqual(result.rejected.length, 1);
+  assert.deepEqual(loadPending(root).items, []);
+  assert.deepEqual(loadDecisions(root).decisions, []);
+});
+
+test('an invalid decision request (an agent trying to smuggle its own answer via a forbidden field) is dropped without ever asking', async () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  await silently(() => runAnalyze(root));
+  // Hand-written directly to pending.json, bypassing upsertDecisionRequest's
+  // own honest shape — simulating a real, untrusted, malicious/broken agent
+  // write, the same threat model every other validator in this codebase
+  // defends against.
+  const pendingPath = path.join(root, '.juntia', 'pending.json');
+  fs.mkdirSync(path.dirname(pendingPath), { recursive: true });
+  fs.writeFileSync(pendingPath, JSON.stringify({
+    schemaVersion: 1,
+    items: [{
+      id: 'x', type: 'product', question: 'What should it be?', text: '15000ms', status: 'pending',
+    }],
+  }));
+
+  let promptCalled = false;
+  const result = await silently(() => runConfirm(root, { prompt: async () => { promptCalled = true; return '15000ms'; } }));
+
+  assert.equal(promptCalled, false, 'must never ask about a request that already tried to set its own answer');
+  assert.equal(result.stale.length, 1);
+  assert.deepEqual(loadDecisions(root).decisions, []);
+});
+
+test('confirming a product decision appends it to DECISIONS.md and refreshes context.md, both labeled distinctly from an interpretation', async () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  await silently(() => runAnalyze(root));
+  upsertDecisionRequest(root, WAIT_TIMEOUT_REQUEST);
+  await silently(() => runConfirm(root, { prompt: scriptedPrompt(['15000ms']) }));
+
+  const narrative = fs.readFileSync(path.join(root, '.juntia', 'DECISIONS.md'), 'utf8');
+  assert.match(narrative, /15000ms — product decision/);
+
+  const context = fs.readFileSync(path.join(root, '.juntia', 'context.md'), 'utf8');
+  assert.match(context, /15000ms \(product decision/);
+});
+
+test('a decision request and a fact interpretation both pending at once are each handled correctly by the same confirm run', async () => {
+  const root = tempProject();
+  await analyzeAndPropose(root, PHASER_INTERPRETATION);
+  upsertDecisionRequest(root, WAIT_TIMEOUT_REQUEST);
+
+  const result = await silently(() => runConfirm(root, { prompt: scriptedPrompt(['y', '15000ms']) }));
+
+  assert.equal(result.confirmed.length, 2);
+  const { decisions } = loadDecisions(root);
+  assert.equal(decisions.length, 2);
+  assert.ok(decisions.some((d) => d.type === 'interpretation'));
+  assert.ok(decisions.some((d) => d.type === 'product'));
 });

@@ -77,6 +77,27 @@ test('after a resolved route, BOOTSTRAP.md reflects that a task handoff now exis
   assert.match(bootstrap, /A task handoff already exists/);
 });
 
+// --- Governance Level Dynamic: the `--signal` flag's programmatic equivalent ---
+
+test('runRoute accepts a declared `signals` option and escalates governance level end-to-end, reflected in both the return value and task-handoff.md', () => {
+  const root = tempProject();
+  const route = silently(() => runRoute('Implementa clientes VIP en el restaurante.', root, { signals: ['architecture_change'] }));
+
+  assert.equal(route.baseGovernanceLevel, 'standard');
+  assert.equal(route.governanceLevel, 'strict');
+
+  const content = fs.readFileSync(path.join(root, '.juntia', 'task-handoff.md'), 'utf8');
+  assert.match(content, /Final governance: STRICT/);
+  assert.match(content, /Required review: architecture decision/);
+});
+
+test('runRoute with no `signals` option behaves exactly as before this addition', () => {
+  const root = tempProject();
+  const route = silently(() => runRoute('Implementa clientes VIP en el restaurante.', root));
+  assert.equal(route.governanceLevel, 'standard');
+  assert.deepEqual(route.detectedSignals, []);
+});
+
 test('route never modifies real project source files', () => {
   const root = tempProject();
   fs.mkdirSync(path.join(root, 'src'));

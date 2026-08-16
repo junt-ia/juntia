@@ -35,6 +35,18 @@ stated change in what the system does.
 - `testing-strategy` — specifically for regression coverage, since correctness here means "nothing changed,"
   not "something new works."
 
+## Decisions this workflow may require
+
+- **Architecture decision** — only if the refactor turns out to touch a category `architecture-review` would
+  flag (see "Roles involved" above) — most refactors do not need this.
+  - `module_boundary` — where the restructured logic should actually live.
+  - `data_model` — only if the refactor turns out to touch how state is shaped, even without changing its
+    meaning — see this file's own "Recommended governance level" below for why that alone escalates to STRICT.
+
+A product decision should never arise here — if answering one seems necessary to proceed, the change stopped
+being a pure refactor (see "When to use" above), and that's worth naming explicitly rather than quietly
+deciding it yourself.
+
 ## Expected outputs
 
 - Restructured code with identical observable behavior, confirmed by the existing (or extended, if coverage

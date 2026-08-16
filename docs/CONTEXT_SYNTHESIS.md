@@ -17,7 +17,7 @@ the full cycle) in `junt-ia/juntia-research` *(planned, not yet created — curr
 |---|---|---|---|
 | Example | `package.json` has a `phaser` dependency | "This looks like a Phaser game" | "This project will keep using Phaser" |
 | Who creates it | The deterministic scanner | An AI runtime, via the existing adapter interface | A human |
-| Confidence | N/A — observed or not | `high` / `medium` / `low` (the same three values `lib/runtime/validator.js` already defines) | N/A |
+| Confidence | N/A — observed or not | `high` / `medium` / `low` (the same three values `lib/runtime/project-interpretation-validator.js` defines directly — originally shared with `lib/runtime/validator.js`, which was removed in the Governance Level Dynamic and Legacy Cleanup phase) | N/A |
 | Lives in | `.juntia/facts.json` (**built**) | `.juntia/pending.json` (**built**, Phase 12K — Phase 12J's console-only output now also persists here) | `.juntia/decisions.json` + `.juntia/DECISIONS.md` (**built**, Phase 12K) |
 | Promotes automatically to the next tier? | Eligible to be cited | **Never** — only `juntia confirm`, answered `y` by a real human, creates a decision | Terminal — but never silently deleted either; see "Decisions and change" below |
 
@@ -26,10 +26,10 @@ it's a read-only, regenerable *projection* of the FACT and DECISION tiers, assem
 project's context next (a human, or a future AI coding runtime). It never contains a pending, unconfirmed
 INTERPRETATION.
 
-A fact never becomes knowledge by itself. An interpretation never becomes a decision by itself. This is the
+A fact never becomes knowledge by itself. An interpretation never becomes a decision by itself. This was the
 same KNOWN/INFERRED/DECISION_REQUIRED discipline the internal reasoning engine (`lib/product-reasoning.js`,
-`lib/architecture-reasoning.js`) already enforces per-request — applied here to persistent project context
-for the first time, not a new rule.
+`lib/architecture-reasoning.js` — both since removed, see `phases/governance-level-dynamic-and-legacy-cleanup.md`)
+enforced per-request — applied here to persistent project context for the first time, not a new rule.
 
 ## The AI runtime's role
 
@@ -41,9 +41,10 @@ project-interpretation-guideline.js` (the system prompt + JSON schema sent to th
 facts + detected changes + existing context into `text`, real-fact identifiers only) and `lib/runtime/
 project-interpretation-validator.js` (rejects any response trying to sneak in a `fact`, `decision`,
 `confirmed`, `action`, `questions`, or `authorization` field — the same anti-hallucination discipline
-`lib/runtime/validator.js` already applies to intent interpretation, extended to this new interpretation
-type). `lib/project-intelligence/context-synthesis-bridge.js` composes all three, mirroring
-`lib/intent-runtime-bridge.js`'s own shape. As of Phase 12K, `EXISTING CONTEXT` in the request text is real,
+`lib/runtime/validator.js` applied to intent interpretation before it was removed, extended to this new
+interpretation type). `lib/project-intelligence/context-synthesis-bridge.js` composes all three, mirroring
+the shape `lib/intent-runtime-bridge.js` used before it, too, was removed (see
+`phases/governance-level-dynamic-and-legacy-cleanup.md`). As of Phase 12K, `EXISTING CONTEXT` in the request text is real,
 not a placeholder: it lists every currently-confirmed decision's text (flagging a `conflicted` one inline)
 so the runtime can avoid re-proposing something already settled — closing a gap Phase 12J's own text left
 open (it always claimed "none persisted yet," which became false the moment `decisions.json` became real).
@@ -112,6 +113,57 @@ record) and a plain-English line appended to `.juntia/DECISIONS.md` (reusing the
 scaffolds and its existing "## Active decisions" bullet convention — not a second, competing narrative
 format). See "Where decisions live" below for why both exist, evaluated rather than assumed.
 
+## Decision types: interpretation, product, architecture (Phase 15F)
+
+The DECISION tier described above was originally shaped for exactly one kind of uncertainty: "what does the
+evidence suggest is true about this project" (an INTERPRETATION, always grounded in real `basedOn` fact
+citations). Real dogfooding (`restaurant-game`, M04, against the published `0.8.0` beta) found a second,
+structurally different kind: "what should this behave like" — a product decision (a wait-timeout duration, a
+reputation-penalty magnitude) or an architecture decision (where a piece of state should live), neither of
+which is grounded in a project fact at all. The pre-15F model had no way to represent this — `.juntia/
+pending.json`/`decisions.json` never got used for it; `.juntia/DECISIONS.md` was hand-edited directly instead,
+completely bypassing Juntia's own structured mechanism. See `phases/15f-decision-model.md` for the full,
+real evidence.
+
+`.juntia/decisions.json` now carries a `type` field (`"interpretation"` | `"product"` | `"architecture"`,
+defaulting to `"interpretation"` for any record written before this phase — fully backward compatible, no
+migration). A product/architecture decision has its own real shape (`question`, `context`, `options`,
+`evidence` — free-text, never fact-validated — and `text`, the human's actual answer) instead of
+`basedOn`/`confidence`; `detectConflicts()` and `context-generator.js`'s rendering both branch on `type`
+explicitly, so a product decision can never be mistaken for (or accidentally validated as) an interpreted
+fact, and vice versa.
+
+The mechanism an agent uses to propose one: a decision REQUEST — `{ "type": "product"|"architecture",
+"question", "context", "options" }` — written to `.juntia/pending.json`, validated by
+`lib/governance/decision-model.js`'s `validateDecisionRequest()` before `juntia confirm` ever asks about it.
+That validator forbids the same fields `validateProjectInterpretation` already forbids, plus `text`/
+`decision`/`confirmedAt`/`source`/`confidence`/`basedOn` — an agent may propose the QUESTION, never the
+ANSWER. `juntia confirm` prompts for a real, human-typed answer for a decision request (free text, or `skip`/
+`reject`), the same human-in-the-loop gate the interpretation flow already had, adapted to a genuinely
+open-ended question instead of a yes/no one.
+
+## Decision discovery: helping a decision appear before it's guessed into code (Phase 15G)
+
+Phase 15F gave decisions a real model once they appear; it still depended entirely on an agent remembering to
+use it. Phase 15G's own real question: can Juntia help a real decision surface *before* an agent silently picks
+a value and writes it into code — without Juntia itself deciding anything, or blocking automatically. Two
+small, additive, Knowledge-Layer-sourced pieces answer it:
+
+Each workflow file can now name specific, real decision AREAS within a type (`## Decisions this workflow may
+require`'s existing bullets gained indented sub-bullets — `feature-development.md`'s `product` bullet now
+lists `behavior`/`user_experience`/`scope`/`balancing`) — parsed into `workflow.decisionAreas` and surfaced as
+a "## Potential decisions" section in `.juntia/task-handoff.md`, alongside a governance-level-specific
+instruction (`workflow.decisionGuidance`, from `governance-levels.js`'s own registry: LIGHT needs no review by
+default, STANDARD should be reviewed before implementing, STRICT requires a real confirmed answer first).
+
+A small, separate catalog, `.juntia/governance/rules/decision-triggers.md` (`lib/governance/
+decision-triggers.js` reads it), names a handful of common, real situations (a new dependency, a tunable
+numeric value with no objectively correct answer, a data-model change, ...) worth recognizing as a possible
+decision. Neither piece is ever matched against a request automatically — both are real, checkable properties
+of the code, not just a stated intention (`decision-triggers.js`'s own loader takes no request text as an
+argument at all, structurally incapable of "detecting" anything on its own). An agent reads them and applies
+its own judgment, the same way it already reads a role or a skill file.
+
 ## Decisions and change: never deleted, always reviewable
 
 A confirmed decision is never rewritten or deleted when the facts it cited change — `lib/project-
@@ -128,8 +180,9 @@ so nothing gets buried after the one-time announcement scrolls past.
 confirmed facts and confirmed decisions only — `lib/project-intelligence/context-generator.js`'s
 `generateContext(facts, decisions)` has no third parameter for a pending interpretation, so there is nothing
 to leak structurally, not just by convention. No placeholder "Constraints"/"Rules" sections are invented —
-this phase found no real, evidenced source for those yet (no decision "type" taxonomy exists), so they're
-left out entirely rather than filled with empty scaffolding.
+this phase found no real, evidenced source for those yet, so they're left out entirely rather than filled
+with empty scaffolding. (A decision "type" taxonomy — interpretation/product/architecture — did not exist
+when this was originally written; see "Decision types" above for Phase 15F, which closed that specific gap.)
 
 ## Where decisions live: `.juntia/decisions.json` vs. `DECISIONS.md`, evaluated
 

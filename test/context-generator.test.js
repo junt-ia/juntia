@@ -93,3 +93,49 @@ test('context.md is NOT git-ignored — no .gitignore entry is created for it', 
   writeContext(root, generateContext(FACTS, []));
   assert.equal(fs.existsSync(path.join(root, '.juntia', '.gitignore')), false);
 });
+
+// --- Phase 15F: product/architecture decisions render distinctly, never as
+// an interpreted fact ---
+
+const PRODUCT_DECISION = {
+  id: 'wait-timeout',
+  type: 'product',
+  question: '¿Cuánto tiempo espera un cliente antes de abandonar?',
+  context: 'NPC waiting system',
+  options: ['10000ms', '15000ms', '20000ms'],
+  text: '15000ms',
+  source: 'human',
+  confirmedAt: '2026-08-16T00:00:00.000Z',
+  status: 'active',
+};
+
+test('a product decision is rendered under "Confirmed decisions", labeled as a product decision — never with the fact-citation "based on:" phrase', () => {
+  const md = generateContext(FACTS, [PRODUCT_DECISION]);
+  assert.match(md, /15000ms \(product decision, confirmed 2026-08-16\)/);
+  assert.doesNotMatch(md, /15000ms.*based on:/);
+});
+
+test('the central invariant: a product decision never appears in the Facts section, and the Facts section is unaffected by which decisions exist', () => {
+  const md = generateContext(FACTS, [PRODUCT_DECISION]);
+  const factsSection = md.split('## Confirmed decisions')[0];
+  assert.doesNotMatch(factsSection, /15000ms/);
+  assert.doesNotMatch(factsSection, /product decision/);
+});
+
+test('the central invariant, the other direction: a real fact never appears under Confirmed decisions merely because a decision also exists', () => {
+  const md = generateContext(FACTS, [ACTIVE_DECISION]);
+  const decisionsSection = md.split('## Confirmed decisions')[1];
+  assert.doesNotMatch(decisionsSection, /react/, 'a real fact (technology: react) must never leak into the decisions section');
+});
+
+test('an architecture decision renders with its own distinct label, not conflated with product', () => {
+  const architectureDecision = { ...PRODUCT_DECISION, id: 'arch-1', type: 'architecture', text: 'restaurant.ts' };
+  const md = generateContext(FACTS, [architectureDecision]);
+  assert.match(md, /restaurant\.ts \(architecture decision, confirmed 2026-08-16\)/);
+});
+
+test('a conflicted product decision still gets the [CONFLICTED] flag alongside its product-decision label', () => {
+  const conflicted = { ...PRODUCT_DECISION, status: 'conflicted' };
+  const md = generateContext(FACTS, [conflicted]);
+  assert.match(md, /15000ms \[CONFLICTED — see below\] \(product decision, confirmed 2026-08-16\)/);
+});

@@ -174,3 +174,111 @@ test('two confirmed decisions both appear in DECISIONS.md, appended in order, no
   assert.match(narrative, /This project appears to use Phaser as its main engine\./);
   assert.match(narrative, /Second real decision\./);
 });
+
+// --- Phase 15F: product/architecture decisions — real evidence, restaurant-game M04 ---
+//
+// Real request that could never go through `recordDecision`'s pre-15F,
+// interpretation-only shape: no `.juntia/facts.json` entry supports a
+// specific timeout duration — there is nothing to cite as `basedOn`.
+
+const PRODUCT_DECISION_REQUEST = {
+  id: 'wait-timeout',
+  type: 'product',
+  question: '¿Cuánto tiempo espera un cliente antes de abandonar?',
+  context: 'NPC waiting system',
+  options: ['10000ms', '15000ms', '20000ms'],
+};
+
+test('recordDecision builds a product-decision record from the human\'s own answer, never from anything the pending item proposed', () => {
+  const root = tempProject();
+  const decision = recordDecision(root, PRODUCT_DECISION_REQUEST, '15000ms');
+
+  assert.equal(decision.type, 'product');
+  assert.equal(decision.text, '15000ms', 'the recorded decision must be the human\'s real answer, not derived from the request');
+  assert.equal(decision.question, PRODUCT_DECISION_REQUEST.question);
+  assert.equal(decision.context, 'NPC waiting system');
+  assert.deepEqual(decision.options, ['10000ms', '15000ms', '20000ms']);
+  assert.equal(decision.source, 'human');
+  assert.equal(decision.status, 'active');
+});
+
+test('an interpretation-type decision also records source: "human" — the same structural guarantee applies to every decision type', () => {
+  const root = tempProject();
+  const decision = recordDecision(root, PENDING_ITEM);
+  assert.equal(decision.source, 'human');
+  assert.equal(decision.type, 'interpretation');
+});
+
+test('a product decision has no basedOn field at all — it is never mistaken for a fact-grounded interpretation', () => {
+  const root = tempProject();
+  const decision = recordDecision(root, PRODUCT_DECISION_REQUEST, '15000ms');
+  assert.equal(decision.basedOn, undefined);
+  assert.equal(decision.confidence, undefined);
+});
+
+test('an architecture decision request records its own type distinctly from product', () => {
+  const root = tempProject();
+  const decision = recordDecision(root, { ...PRODUCT_DECISION_REQUEST, id: 'arch-1', type: 'architecture', question: 'Where should reservation state live?' }, 'In restaurant.ts, not a new module.');
+  assert.equal(decision.type, 'architecture');
+});
+
+test('detectConflicts never flags a product/architecture decision — it has no basedOn to compare against real facts, even when evidence looks like a real-sounding (but not real) fact reference', () => {
+  const decision = {
+    id: 'x', type: 'product', text: '15000ms', evidence: ['docs/MILESTONES.md M04'], status: 'active',
+  };
+  const conflicts = detectConflicts([{ category: 'dependency', name: 'phaser' }], [decision]);
+  assert.equal(conflicts.length, 0, 'a product decision\'s free-text evidence must never be checked against real fact keys');
+});
+
+test('appendDecisionNarrative renders a product decision distinctly — never with the interpretation-shaped "based on: <fact keys>" phrase', () => {
+  const root = tempProject();
+  const decision = recordDecision(root, PRODUCT_DECISION_REQUEST, '15000ms');
+  appendDecisionNarrative(root, decision);
+
+  const narrative = fs.readFileSync(path.join(root, '.juntia', 'DECISIONS.md'), 'utf8');
+  assert.match(narrative, /15000ms — product decision \(NPC waiting system\): ¿Cuánto tiempo espera un cliente antes de abandonar\?/);
+  assert.doesNotMatch(narrative, /based on:/);
+});
+
+test('appendDecisionNarrative renders an architecture decision with its own label, distinct from product', () => {
+  const root = tempProject();
+  const decision = recordDecision(root, { ...PRODUCT_DECISION_REQUEST, id: 'arch-2', type: 'architecture', question: 'Which module owns reservation state?' }, 'restaurant.ts');
+  appendDecisionNarrative(root, decision);
+
+  const narrative = fs.readFileSync(path.join(root, '.juntia', 'DECISIONS.md'), 'utf8');
+  assert.match(narrative, /restaurant\.ts — architecture decision/);
+});
+
+test('a product decision and an interpretation decision coexist in the same decisions.json without either corrupting the other\'s shape', () => {
+  const root = tempProject();
+  recordDecision(root, PENDING_ITEM);
+  recordDecision(root, PRODUCT_DECISION_REQUEST, '15000ms');
+
+  const { decisions } = loadDecisions(root);
+  assert.equal(decisions.length, 2);
+  const interpretation = decisions.find((d) => d.id === PENDING_ITEM.id);
+  const product = decisions.find((d) => d.id === PRODUCT_DECISION_REQUEST.id);
+  assert.equal(interpretation.type, 'interpretation');
+  assert.ok(Array.isArray(interpretation.basedOn) && interpretation.basedOn.length > 0);
+  assert.equal(product.type, 'product');
+  assert.equal(product.basedOn, undefined);
+});
+
+// --- Compatibility: a pre-15F decisions.json (no `type` field at all) ---
+
+test('a decision record with no type field (written before Phase 15F) still renders correctly in the narrative — treated as interpretation, not crashed on', () => {
+  const root = tempProject();
+  const legacyDecision = {
+    id: 'legacy-1',
+    text: 'This project appears to use Phaser.',
+    confidence: 'high',
+    basedOn: ['dependency:phaser'],
+    unknowns: [],
+    confirmedAt: '2026-01-01T00:00:00.000Z',
+    status: 'active',
+  };
+  appendDecisionNarrative(root, legacyDecision);
+
+  const narrative = fs.readFileSync(path.join(root, '.juntia', 'DECISIONS.md'), 'utf8');
+  assert.match(narrative, /This project appears to use Phaser\. — confirmed via `juntia confirm`, based on: dependency:phaser/);
+});

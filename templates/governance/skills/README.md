@@ -48,9 +48,16 @@ No skill engine reads or executes this format yet — these files are read direc
 doing the work, the same way `.juntia/agent-instructions.md` and the role files already are. See
 `phases/15b-knowledge-layer.md` for why a skill executor is deliberately not built this phase.
 
-This directory starts with four skills — enough to validate the model, not a full library:
+This directory starts with seven skills — enough to validate the model, not a full library:
 
 - `feature-planning/` (Product)
 - `architecture-review/` (Architect)
 - `implementation/` (Engineer)
 - `testing-strategy/` (QA)
+- `product-decision-making/` (Product) — recognizing and escalating a real product unknown as a decision
+  request, rather than guessing (Phase 15F).
+- `architecture-decision-record/` (Architect) — documenting a real technical tradeoff and escalating it as a
+  decision request (Phase 15F).
+- `governance-review/` (Engineer) — checking a workflow's own declared decision areas, and what's already
+  pending or decided, immediately before implementing — not when an unknown happens to be noticed, but before
+  any of them get silently guessed into code (Phase 15G).

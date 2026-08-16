@@ -52,13 +52,15 @@ test('init() scaffolds the real governance/ tree, matching what templates/govern
   assert.ok(fs.existsSync(path.join(governanceRoot, 'roles', 'engineer.md')));
   assert.ok(fs.existsSync(path.join(governanceRoot, 'roles', 'qa.md')));
   assert.ok(fs.existsSync(path.join(governanceRoot, 'rules', 'agent-rules.md')));
+  assert.ok(fs.existsSync(path.join(governanceRoot, 'rules', 'decision-triggers.md')));
+  assert.ok(fs.existsSync(path.join(governanceRoot, 'rules', 'governance-signals.md')));
   assert.ok(fs.existsSync(path.join(governanceRoot, 'workflows', 'feature-development.md')));
   assert.ok(fs.existsSync(path.join(governanceRoot, 'workflows', 'bug-fix.md')));
   assert.ok(fs.existsSync(path.join(governanceRoot, 'workflows', 'investigation.md')));
   assert.ok(fs.existsSync(path.join(governanceRoot, 'workflows', 'refactor.md')));
   assert.ok(fs.existsSync(path.join(governanceRoot, 'skills', 'README.md')));
   assert.ok(fs.existsSync(path.join(governanceRoot, 'conventions', 'README.md')));
-  for (const skill of ['feature-planning', 'architecture-review', 'implementation', 'testing-strategy']) {
+  for (const skill of ['feature-planning', 'architecture-review', 'implementation', 'testing-strategy', 'product-decision-making', 'architecture-decision-record', 'governance-review']) {
     assert.ok(fs.existsSync(path.join(governanceRoot, 'skills', skill, 'SKILL.md')), `${skill}/SKILL.md must exist`);
   }
 });
@@ -128,7 +130,7 @@ function parseFrontmatter(markdown) {
   return match[1];
 }
 
-for (const skill of ['feature-planning', 'architecture-review', 'implementation', 'testing-strategy']) {
+for (const skill of ['feature-planning', 'architecture-review', 'implementation', 'testing-strategy', 'product-decision-making', 'architecture-decision-record', 'governance-review']) {
   test(`skills/${skill}/SKILL.md has every required frontmatter field, per the schema in skills/README.md`, () => {
     const content = fs.readFileSync(path.join(TEMPLATES_ROOT, 'skills', skill, 'SKILL.md'), 'utf8');
     const frontmatter = parseFrontmatter(content);
@@ -158,6 +160,20 @@ for (const workflow of ['feature-development', 'bug-fix', 'investigation', 'refa
       assert.match(content, new RegExp(`^${section.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'), `missing section "${section}"`);
     }
     assert.match(content, /\*\*(LIGHT|STANDARD|STRICT)\*\*/, 'must name a real governance level, not leave it unstated');
+  });
+}
+
+// Phase 15G: "Decisions this workflow may require" is real in all four
+// current templates, but deliberately NOT added to REQUIRED_WORKFLOW_SECTIONS
+// above — `workflow-knowledge.js`'s own parser treats its absence as a real,
+// valid "no decision types" answer, not a parse failure (this is exactly
+// what makes a pre-15F workflow file still fully compatible). This is a
+// separate, current-state assertion, not a new hard requirement for every
+// future or hand-edited workflow file.
+for (const workflow of ['feature-development', 'bug-fix', 'investigation', 'refactor']) {
+  test(`workflows/${workflow}.md currently declares a real "Decisions this workflow may require" section`, () => {
+    const content = fs.readFileSync(path.join(TEMPLATES_ROOT, 'workflows', `${workflow}.md`), 'utf8');
+    assert.match(content, /^## Decisions this workflow may require$/m);
   });
 }
 

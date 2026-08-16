@@ -37,8 +37,18 @@ test('parses feature-development.md into its real roles/skills/governance level,
   const markdown = fs.readFileSync(path.join(TEMPLATES_WORKFLOWS, 'feature-development.md'), 'utf8');
   const parsed = parseWorkflowMarkdown(markdown, 'feature-development');
   assert.deepEqual(parsed.roles, ['product', 'architect', 'engineer', 'qa']);
-  assert.deepEqual(parsed.skills, ['feature-planning', 'architecture-review', 'implementation', 'testing-strategy']);
+  assert.deepEqual(parsed.skills, ['feature-planning', 'architecture-review', 'governance-review', 'implementation', 'testing-strategy']);
   assert.equal(parsed.governanceLevel, 'standard');
+  assert.deepEqual(parsed.decisionTypes, ['product', 'architecture']);
+});
+
+test('parses feature-development.md\'s real, named decision areas per type (Phase 15G)', () => {
+  const markdown = fs.readFileSync(path.join(TEMPLATES_WORKFLOWS, 'feature-development.md'), 'utf8');
+  const parsed = parseWorkflowMarkdown(markdown, 'feature-development');
+  assert.deepEqual(parsed.decisionAreas, {
+    product: ['behavior', 'user_experience', 'scope', 'balancing'],
+    architecture: ['data_model', 'module_boundary', 'dependency_choice'],
+  });
 });
 
 test('parses bug-fix.md into its real roles/skills/governance level (LIGHT by default)', () => {
@@ -49,6 +59,19 @@ test('parses bug-fix.md into its real roles/skills/governance level (LIGHT by de
   assert.equal(parsed.governanceLevel, 'light');
 });
 
+// Phase 15G: bug-fix.md now names both decision types explicitly (architecture
+// first, since it's the more common one; product is real but rare) — a
+// refinement over Phase 15F's own decisionTypes: ['architecture'] alone.
+test('parses bug-fix.md\'s decision types and areas — architecture (common) and product (rare, but real)', () => {
+  const markdown = fs.readFileSync(path.join(TEMPLATES_WORKFLOWS, 'bug-fix.md'), 'utf8');
+  const parsed = parseWorkflowMarkdown(markdown, 'bug-fix');
+  assert.deepEqual([...parsed.decisionTypes].sort(), ['architecture', 'product']);
+  assert.deepEqual(parsed.decisionAreas, {
+    architecture: ['regression_source', 'compatibility'],
+    product: ['expected_behavior'],
+  });
+});
+
 test('parses investigation.md, ignoring its non-bolded "whichever role matches" caveat line', () => {
   const markdown = fs.readFileSync(path.join(TEMPLATES_WORKFLOWS, 'investigation.md'), 'utf8');
   const parsed = parseWorkflowMarkdown(markdown, 'investigation');
@@ -57,17 +80,100 @@ test('parses investigation.md, ignoring its non-bolded "whichever role matches" 
   assert.equal(parsed.governanceLevel, 'light');
 });
 
+// Phase 15G refinement: investigation.md now names an architecture decision
+// area (`technical_direction`) it commonly surfaces as a byproduct of
+// answering a question, even though it never writes a decision request
+// itself — see phases/15g-decision-discovery.md for why this is a real
+// refinement over Phase 15F's "None, by design," not a contradiction of it.
+test('investigation.md now names the one real decision area it commonly surfaces (technical_direction), while still never writing a decision itself', () => {
+  const markdown = fs.readFileSync(path.join(TEMPLATES_WORKFLOWS, 'investigation.md'), 'utf8');
+  const parsed = parseWorkflowMarkdown(markdown, 'investigation');
+  assert.deepEqual(parsed.decisionTypes, ['architecture']);
+  assert.deepEqual(parsed.decisionAreas, { architecture: ['technical_direction'] });
+});
+
 test('parses refactor.md into its real roles/skills/governance level (STANDARD by default)', () => {
   const markdown = fs.readFileSync(path.join(TEMPLATES_WORKFLOWS, 'refactor.md'), 'utf8');
   const parsed = parseWorkflowMarkdown(markdown, 'refactor');
   assert.deepEqual(parsed.roles, ['engineer', 'architect']);
   assert.deepEqual(parsed.skills, ['implementation', 'testing-strategy']);
   assert.equal(parsed.governanceLevel, 'standard');
+  assert.deepEqual(parsed.decisionTypes, ['architecture']);
+  assert.deepEqual(parsed.decisionAreas, { architecture: ['module_boundary', 'data_model'] });
 });
 
 test('a markdown file with none of the expected sections parses to null — never a guessed default', () => {
   const parsed = parseWorkflowMarkdown('# Just a title\n\nSome unrelated prose.\n', 'mystery');
   assert.equal(parsed, null);
+});
+
+// --- decisionAreas: a real, deliberate edge case (Phase 15G) ---
+
+test('a decision-type bullet with no indented sub-bullets contributes no entry for that type — "no areas named" is distinct from "named as an empty list"', () => {
+  const markdown = [
+    '## Goal',
+    '',
+    'x',
+    '',
+    '## Roles involved',
+    '',
+    '- **Engineer** — always.',
+    '',
+    '## Skills recommended',
+    '',
+    '- `implementation`',
+    '',
+    '## Decisions this workflow may require',
+    '',
+    '- **Product decision** — a real type, but this file names no specific areas for it.',
+    '',
+    '## Recommended governance level',
+    '',
+    '**LIGHT**.',
+  ].join('\n');
+  const parsed = parseWorkflowMarkdown(markdown, 'edge-case');
+  assert.deepEqual(parsed.decisionTypes, ['product']);
+  assert.deepEqual(parsed.decisionAreas, {}, 'no sub-bullets were declared, so no key should exist for "product" at all');
+});
+
+// --- Compatibility: a pre-15G workflow file (no Decisions section at all) ---
+
+test('a workflow file with no "Decisions this workflow may require" section at all (pre-15F/15G) still resolves fine — decisionTypes/decisionAreas just come back empty', () => {
+  const root = tempProject();
+  init(root);
+  const preDecisionsWorkflow = [
+    '# Workflow: Feature development',
+    '',
+    '## Goal',
+    '',
+    'x',
+    '',
+    '## When to use',
+    '',
+    'x',
+    '',
+    '## Roles involved',
+    '',
+    '- **Engineer** — always.',
+    '',
+    '## Skills recommended',
+    '',
+    '- `implementation`',
+    '',
+    '## Expected outputs',
+    '',
+    '- x',
+    '',
+    '## Recommended governance level',
+    '',
+    '**STANDARD**.',
+  ].join('\n');
+  fs.writeFileSync(path.join(root, '.juntia', 'governance', 'workflows', 'feature-development.md'), preDecisionsWorkflow);
+
+  const result = resolveWorkflowForIntent(root, 'feature');
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.workflow.decisionTypes, []);
+  assert.deepEqual(result.workflow.decisionAreas, {});
 });
 
 // --- Resolution against a real, scaffolded project ---

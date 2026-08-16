@@ -23,6 +23,19 @@ soften/extend one of the ones below, edit it here directly; Juntia will not sile
 - **Never write directly to `.juntia/decisions.json`.** Only a human, via `juntia confirm`, creates a
   decision. If you are proposing a project interpretation (not implementing a change), follow
   `.juntia/agent-instructions.md` instead.
+- **Never invent a product or architecture decision on your own.** If a request leaves a real behavior
+  parameter, threshold, or technical tradeoff unstated, and no existing decision in `.juntia/DECISIONS.md`
+  already covers it, write a decision request — `{ "type": "product"|"architecture", "question": "...",
+  "context": "...", "options": [...] }` — to `.juntia/pending.json`. Propose the question, never the answer;
+  continue only once a human has confirmed a real answer via `juntia confirm`. Not every unknown qualifies —
+  an ordinary implementation detail you can reasonably choose yourself is not a decision request; a
+  hard-to-reverse or genuinely undecided one is.
+- **Check for a real decision before implementing, not after.** Before writing code for a workflow that
+  declares any "Decisions this workflow may require" (see that workflow's own file, or `workflow.decisionAreas`
+  in your Agent Context / task handoff), review each named area against the request — see
+  `.juntia/governance/skills/governance-review/SKILL.md`. `.juntia/governance/rules/decision-triggers.md`
+  names a few common, real situations worth recognizing, but it never decides anything on its own — you judge
+  whether it actually applies.
 
 These rules describe what improves consistency and reduces contradictory or context-losing work across
 sessions — not a guarantee of correctness. A model can still make mistakes; the point is to reduce how often

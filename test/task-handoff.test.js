@@ -22,6 +22,8 @@ const REAL_ROUTE = {
   governanceLevel: 'standard',
   roles: ['product', 'architect', 'engineer', 'qa'],
   skills: ['feature-planning', 'architecture-review', 'implementation', 'testing-strategy'],
+  decisionTypes: ['product', 'architecture'],
+  decisionAreas: { product: ['behavior', 'balancing'], architecture: ['data_model'] },
   needsClarification: false,
   reason: 'feature <- creation/capability language',
 };
@@ -73,6 +75,67 @@ test('buildTaskHandoff returns null when no workflow was resolved — never a ha
     intent: 'unknown', confidence: 0.2, workflow: null, governanceLevel: null, roles: [], skills: [], needsClarification: true, reason: 'no signal',
   };
   assert.equal(buildTaskHandoff('Hola', ambiguousRoute), null);
+});
+
+// --- Phase 15F/15G: the "Potential decisions" section — real mechanism,
+// real named areas, only when relevant ---
+
+test('buildTaskHandoff lists the real, named decision areas per type, matching the brief\'s own worked example shape', () => {
+  const markdown = buildTaskHandoff('Implement customer reputation system.', REAL_ROUTE);
+  assert.match(markdown, /## Potential decisions/);
+  assert.match(markdown, /Product:\n- behavior\n- balancing/);
+  assert.match(markdown, /Architecture:\n- data_model/);
+});
+
+test('buildTaskHandoff names the real decision-request mechanism and governance guidance', () => {
+  const markdown = buildTaskHandoff('Implementa clientes VIP.', REAL_ROUTE);
+  assert.match(markdown, /Governance: STANDARD — Review the potential decision areas/);
+  assert.match(markdown, /\.juntia\/pending\.json/);
+  assert.match(markdown, /juntia confirm/);
+  assert.match(markdown, /"type": "product"\|"architecture"/);
+  assert.match(markdown, /governance-review\/SKILL\.md/);
+});
+
+test('a decision type with no named areas falls back to pointing at the workflow file\'s own section, never an empty list', () => {
+  const routeWithNoAreas = { ...REAL_ROUTE, decisionAreas: {} };
+  const markdown = buildTaskHandoff('Implementa clientes VIP.', routeWithNoAreas);
+  assert.match(markdown, /Decisions this workflow may require/);
+});
+
+test('buildTaskHandoff omits the Potential decisions section entirely when the workflow declares no decision types — never an empty or padded section', () => {
+  const routeWithNoDecisions = { ...REAL_ROUTE, decisionTypes: [] };
+  const markdown = buildTaskHandoff('Analiza el sistema.', routeWithNoDecisions);
+  assert.doesNotMatch(markdown, /## Potential decisions\n/);
+});
+
+test('buildTaskHandoff omits the Potential decisions section when decisionTypes is absent entirely (backward compatibility with a pre-15F route shape)', () => {
+  const { decisionTypes, decisionAreas, ...routeWithoutField } = REAL_ROUTE;
+  const markdown = buildTaskHandoff('Implementa clientes VIP.', routeWithoutField);
+  assert.doesNotMatch(markdown, /## Potential decisions\n/);
+});
+
+// --- Governance Level Dynamic: the Base/Detected/Final/Required-review block ---
+
+test('buildTaskHandoff prints only the plain "Governance: LEVEL" line when no signal was detected — unchanged from before this addition', () => {
+  const markdown = buildTaskHandoff('Implementa clientes VIP.', REAL_ROUTE);
+  assert.match(markdown, /Governance: STANDARD/);
+  assert.doesNotMatch(markdown, /Detected signals:/);
+  assert.doesNotMatch(markdown, /Required review:/);
+});
+
+test('buildTaskHandoff prints the full Base/Detected/Final/Required-review block, matching the brief\'s own worked example, when a signal escalated the route', () => {
+  const escalatedRoute = {
+    ...REAL_ROUTE,
+    governanceLevel: 'strict',
+    baseGovernanceLevel: 'standard',
+    detectedSignals: [{ signal: 'architecture_change', level: 'strict', reason: 'x', decisionType: 'architecture' }],
+    requiredReview: ['architecture'],
+  };
+  const markdown = buildTaskHandoff('Implementa clientes VIP en el restaurante.', escalatedRoute);
+  assert.match(markdown, /Base governance: STANDARD/);
+  assert.match(markdown, /Detected signals:\n- architecture_change/);
+  assert.match(markdown, /Final governance: STRICT/);
+  assert.match(markdown, /Required review: architecture decision/);
 });
 
 test('writeTaskHandoff writes to .juntia/task-handoff.md and returns the real path', () => {

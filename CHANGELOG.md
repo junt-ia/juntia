@@ -8,6 +8,145 @@ All notable changes to `@juntia/juntia` are documented here. Format loosely foll
 
 Nothing yet.
 
+## [0.11.0] - 2026-08-16
+
+Governance Level Dynamic & Legacy Reasoning Cleanup: governance level was a static per-workflow default; this
+phase makes it respond to declared, deterministic impact signals, and finishes retiring the "legacy reasoning"
+architecture Phase 15A first flagged as superseded but never removed. One identity going forward: Juntia as a
+deterministic governance layer, not a reasoning engine. See
+[`phases/governance-level-dynamic-and-legacy-cleanup.md`](phases/governance-level-dynamic-and-legacy-cleanup.md)
+for the full account.
+
+### Added
+
+- `lib/governance/governance-signals.js` (new) + `.juntia/governance/rules/governance-signals.md` (new,
+  scaffolded) — a small, curated catalog of declarable signals (`new_dependency`, `architecture_change`,
+  `data_model_change`, `security_impact`, `breaking_change`, `isolated_change`, `documentation_only`, and
+  others), each naming a LIGHT/STANDARD/STRICT level and an optional decision type. Never matched against a
+  request's text — a caller (an agent, or a human via `juntia route "..." --signal <name>`, repeatable)
+  declares which signals apply; Juntia only computes the deterministic result.
+- `routeWorkflow()`/`buildAgentContext()`/`buildTaskHandoff()` gain `baseGovernanceLevel`, `detectedSignals`,
+  and `requiredReview`. `governanceLevel` is now the FINAL level after any declared signals were applied — a
+  single STRICT-mapped signal escalates over any number of lower ones; an all-LIGHT declaration can
+  de-escalate below a workflow's own STANDARD default. With no signals declared, behavior is byte-identical
+  to the previous static level, for every existing caller.
+- `.juntia/task-handoff.md` prints a `Base governance` / `Detected signals` / `Final governance` /
+  `Required review` block whenever at least one declared signal was recognized; unchanged otherwise.
+- `juntia route "<request>" --signal <name>` (repeatable) — the CLI surface for declaring signals.
+
+### Removed
+
+- The legacy, nine-intent free-text reasoning layer, unwired since Phase 15A and explicitly named in
+  `README.md` as "not part of Juntia's current direction": `lib/intent-router.js`, `lib/product-reasoning.js`,
+  `lib/architecture-reasoning.js`, `lib/engineering-reasoning.js`, `lib/intent-runtime-bridge.js`,
+  `lib/runtime/reasoning-guideline.js` — plus `lib/runtime/validator.js` and
+  `lib/runtime/false-confidence-risk-signal.js`, found orphaned once their only remaining consumer
+  (`intent-runtime-bridge.js`) was removed. **Breaking change** to the public API: `require('@juntia/juntia')`
+  no longer exports `classifyIntent`, `analyzeProduct`, `analyzeArchitecture`, `analyzeEngineering`, or
+  `interpretIntent` — only `classifyTaskIntent`/`routeWorkflow` remain, per `docs/RELEASE.md`'s own 0.x rule
+  that a MINOR release may include a documented breaking change while the public surface is still stabilizing.
+  `lib/runtime/project-interpretation-validator.js` (the actively-used AI Handoff validator — unrelated to
+  the removed intent-domain `validator.js` beyond having briefly shared two constants) now defines
+  `FORBIDDEN_GOVERNANCE_KEYS`/`ALLOWED_CONFIDENCE` directly; unaffected in behavior.
+
+## [0.10.0] - 2026-08-16
+
+Decision Discovery & Governance Triggers: Phase 15F gave Juntia a real model for product/architecture
+decisions once they appear; this phase helps them appear at the right moment — before an agent silently
+guesses a value and writes it into code, the real failure mode `restaurant-game`'s own M04 dogfooding showed
+even with the Phase 15F mechanism already available. "Juntia no toma decisiones. Juntia ayuda al agente a
+saber cuándo una decisión debe existir."
+
+### Added
+
+- Workflow files can now declare specific, named decision AREAS within each type (e.g. `product: behavior,
+  user_experience, scope, balancing`), not just the type itself — parsed by a new `extractDecisionAreas()` in
+  `lib/governance/workflow-knowledge.js` into `workflow.decisionAreas`, propagated through `routeWorkflow()`,
+  `buildAgentContext()`, and a new "## Potential decisions" section in `.juntia/task-handoff.md`.
+- `lib/governance/decision-triggers.js` (new) + `.juntia/governance/rules/decision-triggers.md` (new,
+  scaffolded) — a small, curated catalog (5 entries) of situations that commonly signal a real product/
+  architecture decision (`new_gameplay_rule`, `balancing_value`, `new_dependency`, `data_model_change`,
+  `cross_module_boundary`), each with a type, a reason, and whether it recommends confirmation. Read-only,
+  referenced from `.juntia/BOOTSTRAP.md` — never matched against a request automatically.
+- `governance-levels.js`'s `LEVEL_INFO` gained a `decisionGuidance` field per level (LIGHT/STANDARD/STRICT) —
+  a short, fixed instruction for how seriously to treat a workflow's declared decision areas at that level,
+  surfaced as `workflow.decisionGuidance` in the Agent Context and rendered in `task-handoff.md`.
+- A new skill, `governance-review` (Engineer role) — checking a workflow's own declared decision areas, and
+  what's already pending or decided, immediately before implementing. A real, distinct trigger condition from
+  Phase 15F's `product-decision-making`/`architecture-decision-record` (which activate reactively, once an
+  unknown is already noticed): this one is the proactive, pre-implementation gate the real dogfooding failure
+  mode was missing.
+- `templates/governance/rules/agent-rules.md` gained one new rule: check for a real decision before
+  implementing, not after — pointing at `governance-review` and `decision-triggers.md`.
+
+### Changed
+
+- `investigation.md` now names one real decision area it commonly surfaces (`architecture: technical_direction`)
+  — a refinement over Phase 15F's "None, by design": the workflow still never writes a decision request
+  itself, but can now correctly represent that it commonly surfaces the need for one.
+- `bug-fix.md` now names both decision types explicitly (architecture, common; product, rare but real,
+  `expected_behavior`) instead of only architecture.
+
+### Not built this phase
+
+Per the phase's own explicit restrictions: no automatic task blocking, no AI that detects decisions, no
+machine learning, no multi-agent, no npm publish, no new runtimes. Decision triggers are never matched against
+a request automatically — an agent reads the catalog and applies its own judgment, the same way it already
+does for the Knowledge Layer's other declarative content.
+
+## [0.9.0] - 2026-08-16
+
+Decision Model: real dogfooding in `restaurant-game` against the published `0.8.0` beta found a real gap —
+Juntia's pending/confirmation mechanism was shaped for one kind of uncertainty (interpreting the project's own
+facts) and had no way to represent a product or architecture decision, so `.juntia/DECISIONS.md` was hand-
+edited directly, bypassing Juntia's own structured mechanism entirely. "No todo lo que un agente no sabe es
+una interpretación pendiente. Algunas cosas son decisiones que el equipo debe tomar."
+
+### Added
+
+- `lib/governance/decision-model.js` (new) — `DECISION_TYPES` (`interpretation`/`product`/`architecture`),
+  `validateDecisionRequest()`: the untrusted-input validator for an agent-proposed product/architecture
+  decision request. Forbids the same outcome fields (`text`, `decision`, `confirmedAt`, `source`,
+  `confidence`, `basedOn`) an agent must never set — it may propose a question, never an answer.
+- `.juntia/pending.json` now accepts a decision request shape (`{ type: "product"|"architecture", question,
+  context, options, evidence }`) alongside the existing interpretation shape — a general "needs a human
+  answer" store, no longer coupled only to facts. `lib/project-intelligence/pending-store.js` gained
+  `upsertDecisionRequest`/`decisionRequestId`, mirroring `upsertPending`/`interpretationId` for the new shape.
+- `.juntia/decisions.json` records now carry a `type` field and, for product/architecture, `question`/
+  `context`/`options`/`evidence`/`text` (the human's real answer) — `recordDecision()` and
+  `appendDecisionNarrative()` are type-aware; every decision record now also carries `source: "human"`,
+  structurally documenting the human-confirmation guarantee, uniformly across every type.
+- `juntia confirm` now branches by pending-item type: a decision request prompts for a real, free-text answer
+  (or `skip`/`reject`) instead of yes/no — the same human-in-the-loop gate, adapted to an open-ended question.
+- Workflow files gained a new `## Decisions this workflow may require` section (`feature-development.md`:
+  product + architecture; `bug-fix.md`/`refactor.md`: architecture only; `investigation.md`: none, by design)
+  — parsed by `workflow-knowledge.js` into a new `decisionTypes` field, propagated through `routeWorkflow()`,
+  `buildAgentContext()` (`workflow.decisionTypes`), and a new "## Decisions" section in
+  `.juntia/task-handoff.md` naming the real escalation mechanism for that specific request.
+- Two new skills: `product-decision-making` (Product role) and `architecture-decision-record` (Architect
+  role) — recognizing and escalating a real product/architecture unknown as a decision request, grounded
+  directly in the real restaurant-game gap. A third candidate (`decision-analysis`) was evaluated and not
+  built — its responsibility (comparing options, traceability) is inherent to the two skills above, not a
+  distinct concern with its own real owner.
+- `templates/governance/rules/agent-rules.md` gained one new standing rule: never invent a product or
+  architecture decision — escalate a real, blocking unknown as a decision request instead.
+
+### Changed
+
+- `lib/project-intelligence/decisions-store.js`'s `detectConflicts()` now only ever checks decisions with a
+  real, non-empty `basedOn` array — a real bug this phase's own design review found: a product/architecture
+  decision's free-text `evidence` (e.g. `"docs/MILESTONES.md M04"`) would otherwise always fail to match any
+  real fact key and get incorrectly flagged `conflicted`.
+- `lib/project-intelligence/context-generator.js`'s `summarizeDecisions()` renders product/architecture
+  decisions distinctly — never with the interpretation-shaped "based on: `<fact keys>`" phrase, which would be
+  misleading for a decision that was never grounded in a project fact.
+
+### Not built this phase
+
+Per the phase's own explicit restrictions: no AI decides automatically, no multi-agent, no machine learning,
+no fully autonomous governance, no npm publish, no new providers. No cleanup of the six Legacy Reasoning Layer
+modules. No additional dogfooding session.
+
 ## [0.8.0] - 2026-08-16
 
 **The first public beta release.** Consolidates Phases 15B (Knowledge Layer), 15C (Workflow Routing Engine),

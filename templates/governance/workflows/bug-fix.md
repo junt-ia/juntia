@@ -36,6 +36,21 @@ QA (reproduce) -> Engineer (fix) -> QA (validate)
 - `implementation` — for the investigate/modify steps.
 - `testing-strategy` — for reproducing and validating.
 
+## Decisions this workflow may require
+
+- **Architecture decision** — only if the root cause turns out to be architectural (see "Roles involved"
+  above) and fixing it correctly requires a real, hard-to-reverse tradeoff.
+  - `regression_source` — which real, prior change actually introduced the regression, when that itself is
+    unclear.
+  - `compatibility` — whether the fix can stay backward-compatible, or a real breaking change is unavoidable.
+- **Product decision** — rare: an ordinary bug fix corrects a deviation from an already-decided behavior, it
+  doesn't introduce a new one. Only when the "correct" behavior itself turns out to be genuinely undecided.
+  - `expected_behavior` — what "correct" actually means here, when no existing decision already says so.
+
+Write either as a `type: "product"` or `type: "architecture"` pending item in `.juntia/pending.json` — a
+question, never a proposed answer (see `.juntia/governance/rules/agent-rules.md`) — surface it rather than
+guessing what "correct"/"compatible" should mean.
+
 ## Expected outputs
 
 - A fix whose reproduction case now passes, with no observed regression elsewhere.

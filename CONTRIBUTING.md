@@ -17,9 +17,11 @@ Zero dependencies beyond Node's own `node:test`/`node:assert`/`node:child_proces
 
 - Every module in `lib/` is a plain, dependency-free function (or a small set of them) with a real
   regression test in `test/` — no class hierarchies, no framework.
-- Reasoning modules (`intent-router.js`, `product-reasoning.js`, `architecture-reasoning.js`,
-  `engineering-reasoning.js`) never invent a fact — an unknown stays an explicit unknown rather than a
-  guessed default. See any of their test files for the pattern.
+- Juntia classifies and governs; it does not reason about what to build. A module never interprets free text
+  into anything beyond a classification (intent, workflow, governance level) — see `lib/governance/
+  intent-model.js`/`lib/governance/governance-signals.js` for the pattern, and
+  `phases/governance-level-dynamic-and-legacy-cleanup.md` for the phase that retired the earlier modules
+  that crossed this line.
 - `lib/runtime/` is the only part of the codebase allowed to know about a specific AI provider
   (`claude-cli-adapter.js`); nothing else should import a vendor-specific detail directly.
 - Only `lib/index.js`'s exports are public. `package.json`'s `exports` map enforces this at the package

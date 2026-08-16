@@ -188,7 +188,8 @@ existed for an agent to happen to open, not for Juntia to route toward. Phase 15
   `refactor`, mapped 1:1 to the four real workflow files Phase 15B shipped), numeric `[0, 1]` confidence
   instead of a string label, and `unknown` — with `needsClarification: true` — whenever there isn't enough
   signal, the top two candidates tie, or confidence falls below a threshold. Deliberately not an extension of
-  the legacy `lib/intent-router.js`'s nine-intent taxonomy (see that file's own Phase 15C note).
+  the legacy `lib/intent-router.js`'s nine-intent taxonomy (module since deleted — see
+  `phases/governance-level-dynamic-and-legacy-cleanup.md`).
 - `workflow-knowledge.js` — `resolveWorkflowForIntent(projectRoot, intent)`. Reads the real
   `.juntia/governance/workflows/<file>.md` for a classified intent and parses its already-existing
   `## Roles involved` / `## Skills recommended` / `## Recommended governance level` sections — the same
@@ -201,9 +202,12 @@ existed for an agent to happen to open, not for Juntia to route toward. Phase 15
   ran `init`, or a hand-edited file this parser can't read), both return `workflow: null` and
   `needsClarification: true`.
 - `governance-levels.js` — a small, extensible LIGHT/STANDARD/STRICT registry (label, description, examples,
-  `mayRequireRoles`, `humanConfirmationRequired`). Not a risk classifier — the level a request actually gets is
-  always read from its resolved workflow file, never computed here. Per this phase's own explicit restriction:
-  "no crear todavía una clasificación perfecta de riesgo."
+  `mayRequireRoles`, `humanConfirmationRequired`). Not a risk classifier — a request's BASE level is always
+  read from its resolved workflow file, never computed here. Per this phase's own explicit restriction: "no
+  crear todavía una clasificación perfecta de riesgo." (The Governance Level Dynamic and Legacy Cleanup phase
+  later added `governance-signals.js` alongside this registry — see that phase's own doc — to let a request's
+  FINAL level move away from that base via declared, deterministic signals; this registry itself, and what
+  each level means, is unchanged.)
 
 `juntia route` prints the JSON result and, only when a real workflow was resolved, writes
 `.juntia/task-handoff.md` (`lib/governance/task-handoff.js`) — a second, distinct handoff alongside
@@ -214,11 +218,13 @@ copies — to `.juntia/governance/workflows/<workflow>.md`, the relevant role/sk
 
 **What this still doesn't do**, per the phase's own explicit restrictions: no role is automatically invoked, no
 skill is executed, no workflow runs anything — `route` only *names* the process; an external agent still reads
-`.juntia/governance/` and `task-handoff.md` and decides, reasons, and implements entirely on its own. The
-legacy free-text reasoning modules (`lib/intent-router.js`, `product-reasoning.js`, `architecture-reasoning.js`,
-`engineering-reasoning.js`, `intent-runtime-bridge.js`) remain exactly as unwired as Phase 15A/15B left them —
-this phase built a real, smaller, differently-scoped classifier rather than extending or retiring them. See
-`phases/15c-workflow-routing.md` for the full account.
+`.juntia/governance/` and `task-handoff.md` and decides, reasons, and implements entirely on its own. At the
+time this phase shipped, the legacy free-text reasoning modules (`lib/intent-router.js`, `product-reasoning.js`,
+`architecture-reasoning.js`, `engineering-reasoning.js`, `intent-runtime-bridge.js`) remained exactly as
+unwired as Phase 15A/15B had left them — this phase built a real, smaller, differently-scoped classifier
+rather than extending or retiring them. They were fully removed later, in the Governance Level Dynamic and
+Legacy Cleanup phase — see `phases/governance-level-dynamic-and-legacy-cleanup.md` — once this classifier and
+its own Knowledge Layer routing had real evidence behind them as the sole architecture.
 
 ## The Agent Consumption Model (Phase 15D) — Juntia Bootstrap, Agent Context, and a real Claude Code contract
 
@@ -380,38 +386,26 @@ whichever agent the user has open. The agent proposes an interpretation by writi
 `validateProjectInterpretation` — the same anti-hallucination check, unmodified, now run against every
 pending item regardless of who wrote it) before a human is ever asked to confirm or reject it.
 
-## The provider adapter interface — still real for the INTENT domain, no longer the project-interpretation one
+## The provider adapter interface — retired
 
-`lib/intent-runtime-bridge.js`'s `interpretIntent(text, { adapter, deterministicOnly, adapterOptions })` — a
-genuinely different, narrower, internal domain (routing a free-text request among Juntia's own reasoning
-modules, Phase 04/11C) explicitly kept out of scope by both Phase 13C and 13D — still never imports a
-concrete provider; it accepts any `adapter` object exposing:
-
-```
-adapter.interpret(text, adapterOptions) -> Promise<RuntimeResponse>
-```
-
-and is still exported on the public API (`require('@juntia/juntia').interpretIntent`) for a caller to supply
-their own adapter. `lib/runtime/claude-cli-adapter.js` — the concrete Claude CLI implementation of this shape
-— **no longer exists in this codebase** (deleted Phase 13D, along with the project-interpretation domain's
-own use of it); a caller of `interpretIntent()` must supply their own adapter implementation. No CLI command
-currently drives `interpretIntent()` directly.
+`lib/intent-runtime-bridge.js`'s `interpretIntent(text, { adapter, deterministicOnly, adapterOptions })` — the
+one remaining internal path that called an AI model *from inside Juntia* (routing a free-text request through
+`lib/intent-router.js`'s own reasoning modules, Phase 04/11C) — was deleted in the Governance Level Dynamic
+and Legacy Cleanup phase, along with the rest of the legacy reasoning layer it belonged to (see
+[`../phases/governance-level-dynamic-and-legacy-cleanup.md`](../phases/governance-level-dynamic-and-legacy-cleanup.md)).
+`lib/runtime/claude-cli-adapter.js`, the concrete Claude CLI implementation of the same adapter shape, had
+already been deleted earlier (Phase 13D). No adapter interface remains anywhere in this codebase.
 
 ## When Juntia uses AI at all
 
-As of Phase 13D: **never, internally, for any CLI command.** Every command — `init`, `analyze` (with or
-without `--explain`), `confirm`, `context`, `integrate`, `setup` — is deterministic and mechanical, with no
-subprocess, no API key, no model configuration required to run any of them. `analyze --explain` refreshes a
-handoff file instead of calling a runtime; the actual interpretation happens inside whatever AI agent session
-the user already has open, on their own dime, outside Juntia's process entirely — see "The AI Handoff" above.
-
-The one place AI still enters this codebase is `lib/intent-runtime-bridge.js`'s `interpretIntent()` — the
-intent-classification domain, reachable only programmatically (`require('@juntia/juntia').interpretIntent`),
-never from a CLI command, and only ever called with a caller-supplied adapter. `classifyIntent()` alone
-resolves the large majority of real requests with zero AI calls (Phase 04's own dataset: 48/48; Phase 11's
-full-corpus validation: 143 real texts); the bridge escalates to an adapter only when the deterministic
-router is genuinely `AMBIGUOUS`, or a separate, corpus-validated signal flags a specific false-confidence
-risk pattern.
+**Never, anywhere, for any CLI command or any exported function.** Every command — `init`, `analyze` (with or
+without `--explain`), `confirm`, `context`, `integrate`, `route`, `setup` — is deterministic and mechanical,
+with no subprocess, no API key, no model configuration required to run any of them. `analyze --explain`
+refreshes a handoff file instead of calling a runtime; the actual interpretation happens inside whatever AI
+agent session the user already has open, on their own dime, outside Juntia's process entirely — see "The AI
+Handoff" above. This was already true for every CLI command since Phase 13D; the Governance Level Dynamic and
+Legacy Cleanup phase closed the one remaining programmatic exception (`interpretIntent()`, above), so it is
+now true of the entire public API, not just the commands.
 
 ## Why `update` still isn't built
 

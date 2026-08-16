@@ -36,6 +36,21 @@ not a change. If the answer turns out to require a change, that becomes a separa
 - `architecture-review` — when the question is about an existing component or a design tradeoff, used in its
   read-only, explanatory sense rather than to justify a specific change.
 
+## Decisions this workflow may require
+
+- **Architecture decision** — an investigation commonly surfaces that a real technical-direction choice now
+  needs to be made, even though this workflow never makes or proposes one itself.
+  - `technical_direction` — which real path forward to take, once the investigation has named the actual
+    options (see "Sequence" above) — the choice itself still belongs to a human, and to whichever later
+    workflow acts on it.
+
+This workflow itself never writes a decision request to `.juntia/pending.json` — naming that a decision is
+needed IS this workflow's own real output (see "Expected outputs" below), never a change of its own. Whichever
+workflow acts on the answer (`feature-development.md`, `refactor.md`, ...) is the one that actually escalates
+it, once the request identifies which specific value or tradeoff needs deciding. A product decision never
+arises here — an investigation answers a question about what exists or what's possible, it doesn't itself
+introduce a new, undecided product behavior.
+
 ## Expected outputs
 
 - A clear answer or a clearly-named set of real options — never an implementation.

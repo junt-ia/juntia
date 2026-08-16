@@ -1,6 +1,6 @@
 {
   "name": "@juntia/juntia",
-  "version": "0.8.0",
+  "version": "0.11.0",
   "description": "Juntia: a project-local intelligence, context, and governance layer for humans and AI coding runtimes.",
   "keywords": [
     "ai",

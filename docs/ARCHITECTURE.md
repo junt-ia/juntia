@@ -30,17 +30,19 @@ Inside the "Juntia" box above, there are two layers a developer should think abo
 Juntia
   |
   ├── Public API            juntia setup | init | analyze [--explain] | confirm | context
-  |                         | integrate <runtime> | route "<request>" | update (designed, not built)
-  |                         require('juntia') -- classifyIntent, analyzeProduct,
-  |                         analyzeArchitecture, analyzeEngineering, interpretIntent,
-  |                         classifyTaskIntent, routeWorkflow
+  |                         | integrate <runtime> | route "<request>" [--signal <name>]...
+  |                         | update (designed, not built)
+  |                         require('juntia') -- classifyTaskIntent, routeWorkflow
   |
-  └── Internal engine       intent router, product/architecture/engineering
-                             reasoning, validator, false-confidence risk signal,
-                             runtime bridge, provider adapters (legacy, unwired —
-                             see docs/CLI.md); the Knowledge Layer resolver and
-                             Workflow Routing Engine behind `route` (Phase 15C/15D)
+  └── Internal engine       the Knowledge Layer resolver, the Intent Model, the
+                             Workflow Routing Engine behind `route`, governance
+                             signal evaluation, provider adapters (see docs/CLI.md)
 ```
+
+A single architecture, not two: an earlier "legacy reasoning" layer (intent router, product/architecture/
+engineering reasoning, a runtime bridge that called an AI model from inside Juntia to interpret a request) was
+removed in the Governance Level Dynamic and Legacy Cleanup phase — see
+[`../phases/governance-level-dynamic-and-legacy-cleanup.md`](../phases/governance-level-dynamic-and-legacy-cleanup.md).
 
 A developer using Juntia should only ever need to think in terms of the Public API — "I want to add a
 feature," not "I need to run architecture reasoning." The internal engine decides which of its own pieces a

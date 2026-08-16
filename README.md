@@ -37,7 +37,9 @@ Juntia helps you:
 
 - **Context** — what the project is: confirmed facts, technologies, structure (`.juntia/context.md`).
 - **Project memory** — a persisted, diffable factual baseline that survives across sessions.
-- **Decisions** — a real record of what's been confirmed by a human, and why (`.juntia/DECISIONS.md`).
+- **Decisions** — a real record of what's been confirmed by a human, and why (`.juntia/DECISIONS.md`),
+  distinguishing three real kinds of uncertainty: an *interpretation* of the project's own facts, a *product*
+  decision (what should the behavior be), and an *architecture* decision (what technical tradeoff was made).
 - **Rules** — both project-specific (`.juntia/RULES.md`, human-authored) and Juntia's own standing governance
   rules (`.juntia/governance/rules/agent-rules.md`).
 - **Workflows** — the recommended process per kind of work: feature development, bug fix, investigation,
@@ -52,13 +54,14 @@ Juntia helps you:
 
 ## Status
 
-**Public beta (0.x).** `@juntia/juntia@0.8.0` is the current beta: a deterministic Knowledge Layer (rules,
-workflows, roles, skills), a Workflow Routing Engine connecting free-text requests to that layer, a real Agent
-Consumption Model (`CLAUDE.md` → `.juntia/BOOTSTRAP.md` → `route` → `.juntia/task-handoff.md`) for Claude Code,
-and the full FACT → INTERPRETATION → CONFIRMATION → DECISION → CONTEXT project-memory cycle — all verified
-end-to-end against real external projects and a genuinely external (tarball) install, not just this
-repository's own tests. It stays in `0.x` deliberately: real dogfooding with a live AI agent hasn't been done
-yet, only one runtime (Claude Code) is integrated, and the public API/CLI surface can still change. See
+**Public beta (0.x).** `@juntia/juntia@0.11.0` is the current beta: a deterministic Knowledge Layer (rules,
+workflows, roles, skills, decision triggers, governance signals), a Workflow Routing Engine connecting
+free-text requests to that layer with a dynamic governance level, a real Agent Consumption Model (`CLAUDE.md`
+→ `.juntia/BOOTSTRAP.md` → `route` → `.juntia/task-handoff.md`) for Claude Code, and the full
+FACT → INTERPRETATION → CONFIRMATION → DECISION → CONTEXT project-memory cycle — all verified end-to-end
+against real external projects and a genuinely external (tarball) install, not just this repository's own
+tests. It stays in `0.x` deliberately: real dogfooding with a live AI agent hasn't been done yet, only one
+runtime (Claude Code) is integrated, and the public API/CLI surface can still change. See
 [`docs/RELEASE.md`](docs/RELEASE.md) for what version numbers mean here and [`CHANGELOG.md`](CHANGELOG.md) for
 exactly what shipped in each one.
 
@@ -69,10 +72,10 @@ exactly what shipped in each one.
 - Only Claude Code is a real, built integration; Codex/Gemini/Cursor are architecturally supported, not built.
 - No automatic role invocation or skill execution — Juntia names the process, an agent still has to read and
   follow it manually.
-- Governance levels (LIGHT/STANDARD/STRICT) are a static per-workflow default, not a dynamic risk classifier.
-- The six legacy free-text reasoning modules (`classifyIntent`, `analyzeProduct`, `analyzeArchitecture`,
-  `analyzeEngineering`, `interpretIntent`) remain in the package for compatibility but are not part of the
-  current architecture's vision — see "Programmatic API" below.
+- Governance levels (LIGHT/STANDARD/STRICT) start from a static per-workflow default and can be escalated or
+  de-escalated by declared, deterministic signals (`juntia route "..." --signal <name>`) — see
+  `.juntia/governance/rules/governance-signals.md`. No automatic detection from a request's own text: a
+  signal only applies once something (a human or an agent) explicitly declares it.
 
 ## Installing
 
@@ -178,6 +181,22 @@ never deleted or silently rewritten by a later `analyze` — if the facts it cit
 `conflicted` for you to review, not erased. `juntia context` assembles `.juntia/context.md` from confirmed
 facts and confirmed decisions only — never from something still pending.
 
+Not every real unknown is a fact interpretation, though (Phase 15F): "what should this timeout be" or "where
+should this state live" isn't something evidence can resolve, it's a real product or architecture decision
+your team has to make. An agent hitting one of these writes a decision *request* — a question, options if it
+has real ones, never a proposed answer — to the same `.juntia/pending.json`; `juntia confirm` prompts for your
+own real answer instead of a yes/no, and only that becomes the recorded decision. An agent can never pre-fill
+or self-approve its own decision — that's enforced structurally, not just by convention.
+
+Juntia also helps a decision surface *before* it gets silently guessed into code (Phase 15G): each workflow
+file can name specific decision areas it commonly touches (a feature's own file names `behavior`,
+`user_experience`, `scope`, `balancing` for product; `data_model`, `module_boundary`, `dependency_choice` for
+architecture) — real, named areas, not a generic checklist. `juntia route` surfaces these as "Potential
+decisions" in `.juntia/task-handoff.md`, and `.juntia/governance/rules/decision-triggers.md` names a few
+common, real situations worth recognizing (a new dependency, a tunable numeric value with no objectively
+correct answer, ...). None of this decides anything or blocks automatically — it's navigation an agent reads
+and applies its own judgment to, the same way every other Knowledge Layer file already works.
+
 Juntia's context is only useful if an agent actually reads it: `juntia integrate claude-code` generates
 `CLAUDE.md` at your project root — a minimal, real **entry point** (Phase 15D), never a full index: it says
 this project uses Juntia Governance and points Claude Code at `.juntia/BOOTSTRAP.md`, which is where the real
@@ -203,25 +222,33 @@ for the full model.
 
 ## Programmatic API
 
-The Workflow Routing Engine that powers `juntia route` is also directly importable — the same, current
-governance surface, not a separate reasoning layer:
+The Workflow Routing Engine that powers `juntia route` is also directly importable — the whole governance
+surface, a single architecture, not one of two competing ones:
 
 ```js
 const { classifyTaskIntent, routeWorkflow } = require('@juntia/juntia');
 
 const route = routeWorkflow('Implement VIP customers in the restaurant.', process.cwd());
 // -> { intent: 'feature', confidence: 0.9, workflow: 'feature-development', governanceLevel: 'standard',
+//      baseGovernanceLevel: 'standard', detectedSignals: [], requiredReview: [],
 //      roles: [...], skills: [...], needsClarification: false, reason: '...' }
+
+// governanceLevel can be escalated or de-escalated by declaring signals — never inferred from text:
+const escalated = routeWorkflow('Implement VIP customers in the restaurant.', process.cwd(), {
+  signals: ['architecture_change'],
+});
+// -> governanceLevel: 'strict', baseGovernanceLevel: 'standard',
+//    detectedSignals: [...], requiredReview: ['architecture']
 ```
 
-Two older exports (`classifyIntent`, `interpretIntent`) and three (`analyzeProduct`, `analyzeArchitecture`,
-`analyzeEngineering`) remain exported for compatibility — a nine-intent, free-text classifier and a
-product/architecture/engineering reasoning pipeline built early in this project's history, before the current
-Knowledge Layer/routing architecture existed. **They are not part of Juntia's current direction**: attempting
-to interpret *what should be built* is exactly the kind of reasoning Juntia's own governing definition keeps
-out of scope ("AI interprets. Juntia governs."). They're kept, not removed, because removing tested, working,
-still-reachable code without real evidence it's safe to drop would be its own kind of unjustified change — not
-because they're recommended for new use. Prefer `classifyTaskIntent`/`routeWorkflow` for anything new.
+An earlier, five-export "legacy reasoning" layer (`classifyIntent`, `interpretIntent`, `analyzeProduct`,
+`analyzeArchitecture`, `analyzeEngineering`) — a nine-intent, free-text classifier and a
+product/architecture/engineering reasoning pipeline built early in this project's history — was removed in the
+Governance Level Dynamic and Legacy Cleanup phase (see
+[`phases/governance-level-dynamic-and-legacy-cleanup.md`](phases/governance-level-dynamic-and-legacy-cleanup.md)).
+It had been kept, unremoved, for several phases specifically to avoid dropping tested, working code without
+real evidence it was safe to — this phase is that evidence: `classifyTaskIntent`/`routeWorkflow` are now the
+only, current, real entrypoint, and the two-architecture ambiguity is gone.
 
 Only the documented surface above is importable — `require('@juntia/juntia/lib/...')` (any internal module) is
 blocked by the package's own `exports` map, not just by convention. See [`lib/index.js`](lib/index.js) for the

@@ -103,12 +103,14 @@ Decision tiers above) is now real and built end-to-end — see
 DECISION → CONTEXT model, without ever inventing a fact or silently promoting a guess into a recorded
 decision without a real human saying yes.
 
-## Reuses an existing, already-tested contract
+## A shape this repo has real precedent for, even though the code that defined it is gone
 
-`analyze`'s eventual output for the Architecture category is not a new data shape — it's a real instance of
-`known.existingArchitecture.components[]` (`{ name, description, relevantTo, files }`), the same input
-`analyzeArchitecture()` and `analyzeEngineering()` already accept and have real tests against. No new
-contract is designed here.
+`analyze`'s eventual output for the Architecture category, if built, need not invent a new data shape:
+`known.existingArchitecture.components[]` (`{ name, description, relevantTo, files }`) was a real, tested
+input shape the legacy `analyzeArchitecture()`/`analyzeEngineering()` modules accepted before they were
+removed in the Governance Level Dynamic and Legacy Cleanup phase (see
+`phases/governance-level-dynamic-and-legacy-cleanup.md`) — worth reusing as prior art if this category is ever
+actually built, not something to redesign from scratch.
 
 ## Full reasoning
 

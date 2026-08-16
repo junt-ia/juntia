@@ -22,6 +22,8 @@ const RESOLVED_ROUTE = {
   governanceLevel: 'standard',
   roles: ['product', 'architect', 'engineer', 'qa'],
   skills: ['feature-planning', 'architecture-review', 'implementation', 'testing-strategy'],
+  decisionTypes: ['product', 'architecture'],
+  decisionAreas: { product: ['behavior', 'balancing'], architecture: ['data_model'] },
   needsClarification: false,
   reason: 'feature <- creation/capability language',
 };
@@ -43,9 +45,75 @@ test('matches the brief\'s own exact shape for a resolved route', () => {
   assert.deepEqual(context.task, {
     intent: 'feature', confidence: 0.9, needsClarification: false, reason: 'feature <- creation/capability language',
   });
-  assert.deepEqual(context.workflow, { name: 'feature-development', governanceLevel: 'standard' });
+  assert.deepEqual(context.workflow, {
+    name: 'feature-development',
+    governanceLevel: 'standard',
+    baseGovernanceLevel: 'standard',
+    detectedSignals: [],
+    requiredReview: [],
+    decisionTypes: ['product', 'architecture'],
+    decisionAreas: { product: ['behavior', 'balancing'], architecture: ['data_model'] },
+    decisionGuidance: 'Review the potential decision areas below before implementing; escalate any that actually apply.',
+  });
   assert.deepEqual(context.roles, ['product', 'architect', 'engineer', 'qa']);
   assert.deepEqual(context.skills, ['feature-planning', 'architecture-review', 'implementation', 'testing-strategy']);
+});
+
+test('workflow.decisionTypes defaults to an empty array when the route carries none (backward compatibility with a pre-15F route shape)', () => {
+  const { decisionTypes, ...routeWithoutDecisionTypes } = RESOLVED_ROUTE;
+  const context = buildAgentContext(routeWithoutDecisionTypes);
+  assert.deepEqual(context.workflow.decisionTypes, []);
+});
+
+test('workflow.decisionAreas defaults to {} when the route carries none (backward compatibility with a pre-15G route shape)', () => {
+  const { decisionAreas, ...routeWithoutDecisionAreas } = RESOLVED_ROUTE;
+  const context = buildAgentContext(routeWithoutDecisionAreas);
+  assert.deepEqual(context.workflow.decisionAreas, {});
+});
+
+test('workflow.decisionGuidance is read from governance-levels.js\'s own registry, never computed from the request', () => {
+  const context = buildAgentContext(RESOLVED_ROUTE);
+  assert.equal(typeof context.workflow.decisionGuidance, 'string');
+  assert.ok(context.workflow.decisionGuidance.length > 0);
+
+  const strictRoute = { ...RESOLVED_ROUTE, governanceLevel: 'strict' };
+  const strictContext = buildAgentContext(strictRoute);
+  assert.match(strictContext.workflow.decisionGuidance, /confirmation is required/);
+  assert.notEqual(strictContext.workflow.decisionGuidance, context.workflow.decisionGuidance);
+});
+
+test('workflow.decisionGuidance is null when the route has no resolvable governance level', () => {
+  const routeWithBadLevel = { ...RESOLVED_ROUTE, governanceLevel: 'not-a-real-level' };
+  const context = buildAgentContext(routeWithBadLevel);
+  assert.equal(context.workflow.decisionGuidance, null);
+});
+
+test('workflow.baseGovernanceLevel falls back to governanceLevel when the route carries none (backward compatibility with a pre-signals route shape)', () => {
+  const { baseGovernanceLevel, ...routeWithoutBase } = { ...RESOLVED_ROUTE, baseGovernanceLevel: 'standard' };
+  void baseGovernanceLevel;
+  const context = buildAgentContext(routeWithoutBase);
+  assert.equal(context.workflow.baseGovernanceLevel, 'standard');
+});
+
+test('workflow.detectedSignals/requiredReview default to [] when the route carries none (backward compatibility)', () => {
+  const context = buildAgentContext(RESOLVED_ROUTE);
+  assert.deepEqual(context.workflow.detectedSignals, []);
+  assert.deepEqual(context.workflow.requiredReview, []);
+});
+
+test('workflow.baseGovernanceLevel/detectedSignals/requiredReview carry through when a signal escalated the route', () => {
+  const escalatedRoute = {
+    ...RESOLVED_ROUTE,
+    governanceLevel: 'strict',
+    baseGovernanceLevel: 'standard',
+    detectedSignals: [{ signal: 'architecture_change', level: 'strict', reason: 'x', decisionType: 'architecture' }],
+    requiredReview: ['architecture'],
+  };
+  const context = buildAgentContext(escalatedRoute);
+  assert.equal(context.workflow.governanceLevel, 'strict');
+  assert.equal(context.workflow.baseGovernanceLevel, 'standard');
+  assert.deepEqual(context.workflow.detectedSignals, [{ signal: 'architecture_change', level: 'strict', reason: 'x', decisionType: 'architecture' }]);
+  assert.deepEqual(context.workflow.requiredReview, ['architecture']);
 });
 
 test('contextSources is exactly context.md plus the resolved workflow file — matches the brief\'s own worked example', () => {
