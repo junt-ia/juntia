@@ -17,9 +17,16 @@ const path = require('path');
 
 const { runAnalyze, runConfirm, runContext } = require('../bin/juntia.js');
 const { generateContext } = require('../lib/project-intelligence/context-generator.js');
-const { buildAgentRules } = require('../lib/project-intelligence/agent-governance.js');
 const { loadFacts } = require('../lib/project-intelligence/facts-store.js');
 const { upsertPending } = require('../lib/project-intelligence/pending-store.js');
+
+// Phase 15B: agent-rules.md content moved from a JS string builder
+// (agent-governance.js, removed) to a static template file — read directly,
+// the same way an agent reading a real, scaffolded project would.
+const AGENT_RULES_TEMPLATE = path.join(__dirname, '..', 'templates', 'governance', 'rules', 'agent-rules.md');
+function agentRulesContent() {
+  return fs.readFileSync(AGENT_RULES_TEMPLATE, 'utf8');
+}
 
 function tempProject() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'juntia-governance-sep-test-'));
@@ -60,7 +67,7 @@ test('context.md (what this project is) never contains a behavioral instruction 
 });
 
 test('agent-rules.md (how to behave) never contains this project\'s own specific facts', () => {
-  const rules = buildAgentRules();
+  const rules = agentRulesContent();
   assert.doesNotMatch(rules, /phaser/i);
   assert.doesNotMatch(rules, /TypeScript/);
 });

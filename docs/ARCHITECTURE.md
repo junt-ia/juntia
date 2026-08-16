@@ -29,13 +29,17 @@ Inside the "Juntia" box above, there are two layers a developer should think abo
 ```
 Juntia
   |
-  ├── Public API            juntia init | analyze | update | integrate
+  ├── Public API            juntia setup | init | analyze [--explain] | confirm | context
+  |                         | integrate <runtime> | route "<request>" | update (designed, not built)
   |                         require('juntia') -- classifyIntent, analyzeProduct,
-  |                         analyzeArchitecture, analyzeEngineering, interpretIntent
+  |                         analyzeArchitecture, analyzeEngineering, interpretIntent,
+  |                         classifyTaskIntent, routeWorkflow
   |
   └── Internal engine       intent router, product/architecture/engineering
                              reasoning, validator, false-confidence risk signal,
-                             runtime bridge, provider adapters
+                             runtime bridge, provider adapters (legacy, unwired —
+                             see docs/CLI.md); the Knowledge Layer resolver and
+                             Workflow Routing Engine behind `route` (Phase 15C/15D)
 ```
 
 A developer using Juntia should only ever need to think in terms of the Public API — "I want to add a

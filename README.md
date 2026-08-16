@@ -85,7 +85,7 @@ Configuring Claude Code...
 ✓ Connected project context
 
 Juntia is ready.
-Open Claude Code and ask it to follow .juntia/agent-instructions.md to interpret this project.
+Open Claude Code — it will find CLAUDE.md and load Juntia's governance from there.
 ```
 
 ### Advanced: the individual commands
@@ -99,11 +99,14 @@ npx juntia analyze --explain    # also refreshes .juntia/agent-instructions.md, 
 npx juntia confirm              # you review each pending interpretation — yes becomes a decision, no discards it
 npx juntia context              # (re)builds .juntia/context.md from confirmed facts + confirmed decisions
 npx juntia integrate claude-code  # generates CLAUDE.md so Claude Code finds everything above automatically
+npx juntia route "<what you want to do>"  # classifies a request and resolves the workflow to follow
 ```
 
 `init` creates a `.juntia/` directory (`config.yml`, `PROJECT_STATE.md`, `DECISIONS.md`, `RULES.md`,
-`ARCHITECTURE.md`, `roles/*.md`) in whatever directory you run it from — nothing is read, analyzed, or sent
-anywhere, and running it again never overwrites a file that's already there. `analyze` detects languages,
+`ARCHITECTURE.md`, and the Knowledge Layer under `governance/` — `rules/`, `workflows/`, `roles/`, `skills/`,
+`conventions/`) in whatever directory you run it from — nothing is read, analyzed, or sent anywhere, and
+running it again never overwrites a file that's already there; every file scaffolded is a static, declarative
+artifact you're free to edit once it exists, never silently regenerated later. `analyze` detects languages,
 declared dependencies, recognized config files, and top-level structure — purely mechanical (no AI, no
 interpretation, no project "type" guessed) — and persists what it found to `.juntia/facts.json`
 (git-ignored by default): the first run creates that baseline, every run after that reports what's
@@ -123,12 +126,22 @@ never deleted or silently rewritten by a later `analyze` — if the facts it cit
 facts and confirmed decisions only — never from something still pending.
 
 Juntia's context is only useful if an agent actually reads it: `juntia integrate claude-code` generates
-`CLAUDE.md` at your project root as a governance **index** — pointing Claude Code at `context.md`,
-`DECISIONS.md`, the generated `agent-rules.md`/`workflows.md` (how to behave, and in what order), and
-`agent-instructions.md` — no copy of any of their content, no AI call, nothing sent anywhere, and it never
-overwrites a `CLAUDE.md` you already wrote yourself. Other runtimes (Codex, Gemini, Cursor) are
-architecturally supported but not built yet — no real evidence for their own conventions exists in this repo
-yet, so nothing was guessed at.
+`CLAUDE.md` at your project root — a minimal, real **entry point** (Phase 15D), never a full index: it says
+this project uses Juntia Governance and points Claude Code at `.juntia/BOOTSTRAP.md`, which is where the real
+navigation lives (`context.md`, `DECISIONS.md`, the Knowledge Layer, `agent-instructions.md`, and how to get
+the workflow/roles/skills for a *specific* request via `juntia route`, without reading everything up front). No
+copy of any of their content, no AI call, nothing sent anywhere, and it never overwrites a `CLAUDE.md` you
+already wrote yourself. Other runtimes (Codex, Gemini, Cursor) are architecturally supported but not built
+yet — no real evidence for their own conventions exists in this repo yet, so nothing was guessed at.
+
+`juntia route "<request>"` (Phase 15C, extended Phase 15D) is the Workflow Routing Engine: it classifies a
+free-text request into one of `feature`/`bug`/`investigation`/`refactor` (or `unknown`, when there isn't
+enough signal — it never guesses a workflow), resolves the matching `.juntia/governance/workflows/*.md` file,
+and prints an Agent Context — `{ task: { intent, confidence }, workflow: { name, governanceLevel }, roles,
+skills, contextSources }`, navigation only, never a solution — plus writes `.juntia/task-handoff.md` for
+whichever AI agent you're working with. Juntia still never decides *how* to build anything; it only decides
+which process applies. `route` also refreshes `.juntia/BOOTSTRAP.md`, so it always reflects whether a task
+handoff currently exists.
 
 See [`docs/CLI.md`](docs/CLI.md) for the full public command surface (`update` still designed, not built) and
 [`docs/PROJECT_INTELLIGENCE.md`](docs/PROJECT_INTELLIGENCE.md) /

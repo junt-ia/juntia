@@ -19,8 +19,11 @@ const {
   integrateRuntime, RUNTIME_PROFILES, PLANNED_PROVIDERS, readRuntimeProvider, withRuntimeProvider,
 } = require('../lib/project-intelligence/agent-integration.js');
 const { HANDOFF_FILE, buildHandoffInstructions, writeHandoffInstructions } = require('../lib/project-intelligence/agent-handoff.js');
-const { writeAgentGovernance } = require('../lib/project-intelligence/agent-governance.js');
 const { validateProjectInterpretation } = require('../lib/runtime/project-interpretation-validator.js');
+const { routeWorkflow } = require('../lib/governance/workflow-router.js');
+const { buildAgentContext } = require('../lib/governance/agent-context.js');
+const { TASK_HANDOFF_FILE, buildTaskHandoff, writeTaskHandoff } = require('../lib/governance/task-handoff.js');
+const { writeBootstrap } = require('../lib/governance/bootstrap.js');
 
 const PACKAGE_ROOT = path.join(__dirname, '..');
 const TEMPLATES_DIR = path.join(PACKAGE_ROOT, 'templates');
@@ -33,16 +36,37 @@ function pkgVersion() {
 // Files `init` scaffolds into <project>/.juntia/, copied verbatim from
 // templates/ — never overwritten if already present, so a second `init` run
 // is always safe and never clobbers real project content.
+//
+// Phase 15B: the Knowledge Layer contract. `governance/roles/*.md` (moved
+// here from the old `roles/*.md`, Phase 00-era content unchanged) sits
+// alongside four new subdirectories — rules/, workflows/, skills/,
+// conventions/ — whose content used to be either generated on every
+// `integrate` call from a JS string builder (`agent-governance.js`, now
+// removed) or not exist at all. Every file below is now real, static,
+// declarative content, copied once like every other scaffold file and never
+// regenerated — a project is free to edit its own copy once it exists. See
+// phases/15b-knowledge-layer.md for the full audit and rationale.
 const SCAFFOLD_FILES = [
   'config.yml',
   'PROJECT_STATE.md',
   'DECISIONS.md',
   'RULES.md',
   'ARCHITECTURE.md',
-  path.join('roles', 'product.md'),
-  path.join('roles', 'architect.md'),
-  path.join('roles', 'engineer.md'),
-  path.join('roles', 'qa.md'),
+  path.join('governance', 'roles', 'product.md'),
+  path.join('governance', 'roles', 'architect.md'),
+  path.join('governance', 'roles', 'engineer.md'),
+  path.join('governance', 'roles', 'qa.md'),
+  path.join('governance', 'rules', 'agent-rules.md'),
+  path.join('governance', 'workflows', 'feature-development.md'),
+  path.join('governance', 'workflows', 'bug-fix.md'),
+  path.join('governance', 'workflows', 'investigation.md'),
+  path.join('governance', 'workflows', 'refactor.md'),
+  path.join('governance', 'skills', 'README.md'),
+  path.join('governance', 'skills', 'feature-planning', 'SKILL.md'),
+  path.join('governance', 'skills', 'architecture-review', 'SKILL.md'),
+  path.join('governance', 'skills', 'implementation', 'SKILL.md'),
+  path.join('governance', 'skills', 'testing-strategy', 'SKILL.md'),
+  path.join('governance', 'conventions', 'README.md'),
 ];
 
 // Pure filesystem scaffolding: no code is read or analyzed, no network call
@@ -360,6 +384,14 @@ function runContext(projectRoot = process.cwd()) {
 // lib/project-intelligence/agent-integration.js). `init()` runs first,
 // idempotently, so `.juntia/config.yml` exists to record the integration
 // even on a project that never explicitly ran `juntia init`.
+// Phase 15B: `init()` running first, unconditionally, means the Knowledge
+// Layer (`.juntia/governance/`) is scaffolded even when the runtime-specific
+// pointer file below is refused (e.g. a real, human-authored CLAUDE.md
+// already exists) — a real, positive behavior change from Phase 14A, where
+// agent-rules.md/workflows.md were only ever written after a successful
+// pointer-file integration, so a project with its own CLAUDE.md could never
+// get them at all. Knowledge Layer content is runtime-agnostic; it no longer
+// depends on which (if any) runtime-specific integration succeeds.
 // `silent` (Phase 13A) lets `runSetup()` reuse this exact function — same
 // safety checks, same file writes, zero duplicated logic — while printing
 // its own, setup-appropriate summary line instead of this command's normal
@@ -390,15 +422,76 @@ function runIntegrate(runtimeName, projectRoot = process.cwd(), { silent = false
   const { decisions } = loadDecisions(projectRoot);
   writeHandoffInstructions(projectRoot, buildHandoffInstructions(facts, undefined, decisions));
 
-  // Agent Governance (Phase 14A): fixed, deterministic content — the same
-  // for every project, no facts/decisions input needed — so it's always
-  // safe to regenerate here unconditionally, same as the handoff file.
-  writeAgentGovernance(projectRoot);
+  // Phase 15D: `.juntia/BOOTSTRAP.md` — the real navigation index Phase
+  // 14A/15B used to bake directly into the runtime pointer file — is now
+  // regenerated here instead, same "always current, never hand-edited"
+  // policy as the handoff file above, not the Knowledge Layer's own
+  // "scaffold once" one.
+  writeBootstrap(projectRoot);
+
+  // Phase 15B: agent-rules.md/workflows.md (and roles/skills/conventions)
+  // are no longer generated here — `init(projectRoot)` above already
+  // scaffolded `.juntia/governance/` from static templates if it didn't
+  // exist yet, the same mechanism every other scaffold file already uses.
+  // Unlike the handoff file, they are not regenerated on every `integrate`
+  // call: they're a project's own editable copy once scaffolded.
 
   log(`Created/updated ${result.file}${result.configUpdated ? ' and .juntia/config.yml' : ''}.`);
-  log(`${result.file} points to .juntia/context.md — nothing was copied, nothing was sent anywhere.`);
+  log(`${result.file} points to .juntia/BOOTSTRAP.md — nothing was copied, nothing was sent anywhere.`);
   log(`Safe to delete and regenerate any time with \`juntia integrate ${runtimeName}\`; never hand-edit it.`);
   return result;
+}
+
+// --- Workflow Routing Engine (Phase 15C) ------------------------------------
+//
+// `juntia route "<request>"` is the real entrypoint for this phase's own
+// deliverable: turning a free-text request into the structured work
+// framework (intent, confidence, workflow, governance level, roles, skills)
+// `lib/governance/workflow-router.js` computes, deterministically, from the
+// Knowledge Layer. `init(projectRoot)` runs first, unconditionally and
+// silently — same precedent `runIntegrate` already established — so a
+// project that never ran `juntia init` still gets a real answer instead of
+// an avoidable "Knowledge Layer not found" failure.
+//
+// Never invents a workflow: when the request is ambiguous or the intent
+// couldn't be resolved to a real workflow, no `.juntia/task-handoff.md` is
+// written at all — only the printed Agent Context and a plain-language
+// nudge to clarify the request.
+//
+// Phase 15D: what's printed to the console is now the Agent Context (`{
+// task, workflow, roles, skills, contextSources }`, `lib/governance/
+// agent-context.js`) — the brief's own exact navigation contract — rather
+// than `routeWorkflow()`'s flat internal shape. The return value stays the
+// flat shape unchanged (`intent`/`workflow`/`governanceLevel`/... at the
+// top level) for programmatic/test callers already depending on it; only
+// the human/agent-facing presentation changed. `.juntia/BOOTSTRAP.md` is
+// refreshed regardless of outcome, so it always reflects whether a task
+// handoff currently exists.
+function runRoute(text, projectRoot = process.cwd()) {
+  if (!text || !text.trim()) {
+    console.log('Usage: juntia route "<what you want to do>"');
+    return { ok: false, reason: 'no request text given' };
+  }
+
+  init(projectRoot);
+  const route = routeWorkflow(text, projectRoot);
+  const agentContext = buildAgentContext(route);
+  console.log(JSON.stringify(agentContext, null, 2));
+
+  if (!route.workflow) {
+    console.log('');
+    console.log(`No workflow selected — ${route.reason || 'not enough signal to classify this request.'}`);
+    console.log('Describe what should change, or whether this is a question, a bug, or a refactor, and try again.');
+    writeBootstrap(projectRoot);
+    return route;
+  }
+
+  const markdown = buildTaskHandoff(text, route);
+  writeTaskHandoff(projectRoot, markdown);
+  writeBootstrap(projectRoot);
+  console.log('');
+  console.log(`Task handoff written to ${TASK_HANDOFF_FILE} — open your AI assistant and ask it to follow it.`);
+  return route;
 }
 
 // --- Setup Orchestrator (Phase 13A) -----------------------------------------
@@ -561,11 +654,13 @@ async function runSetup(projectRoot = process.cwd(), { prompt = defaultPrompt } 
   }
 
   // 10: done. If an assistant is configured, `integrate` (step 9) already
-  // refreshed .juntia/agent-instructions.md — point the user at it as the
-  // real next action, same handoff `analyze --explain` offers on its own.
+  // wrote a real runtime pointer file (e.g. CLAUDE.md) that itself points at
+  // `.juntia/BOOTSTRAP.md` — point the user at opening their assistant, full
+  // stop (Phase 15D): the assistant discovers what it needs to do from
+  // there on its own, without the user needing to name a specific file.
   console.log('Juntia is ready.');
   if (integrateResult && integrateResult.ok) {
-    console.log(`Open ${RUNTIME_PROFILES[provider] ? RUNTIME_PROFILES[provider].label : provider} and ask it to follow .juntia/agent-instructions.md to interpret this project.`);
+    console.log(`Open ${RUNTIME_PROFILES[provider] ? RUNTIME_PROFILES[provider].label : provider} — it will find ${integrateResult.file} and load Juntia's governance from there.`);
   }
 
   return { initialized: !wasInitialized, provider, integrateResult };
@@ -578,6 +673,7 @@ module.exports = {
   runConfirm,
   runContext,
   runIntegrate,
+  runRoute,
   runSetup,
   formatAnalysis,
   formatChanges,
@@ -603,9 +699,10 @@ if (require.main === module) {
       .catch((err) => { console.error(`confirm failed: ${err.message}`); process.exit(1); });
   } else if (command === 'context') runContext(process.cwd());
   else if (command === 'integrate') runIntegrate(process.argv[3]);
+  else if (command === 'route') runRoute(process.argv.slice(3).join(' '));
   else if (command === '--version' || command === '-v') console.log(pkgVersion());
   else {
-    console.error('Usage: juntia <setup|init|analyze [--explain]|confirm|context|integrate <runtime>>');
+    console.error('Usage: juntia <setup|init|analyze [--explain]|confirm|context|integrate <runtime>|route "<request>">');
     console.error('New to Juntia? Run `juntia setup` — it walks through everything for you.');
     process.exit(1);
   }

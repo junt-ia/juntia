@@ -37,7 +37,7 @@ test('init() copies real template content, not empty placeholders', () => {
   const configContent = fs.readFileSync(path.join(projectRoot, '.juntia', 'config.yml'), 'utf8');
   assert.match(configContent, /schema_version: 1/);
 
-  const roleContent = fs.readFileSync(path.join(projectRoot, '.juntia', 'roles', 'product.md'), 'utf8');
+  const roleContent = fs.readFileSync(path.join(projectRoot, '.juntia', 'governance', 'roles', 'product.md'), 'utf8');
   assert.match(roleContent, /Not an autonomous agent/);
 });
 

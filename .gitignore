@@ -2,3 +2,7 @@ node_modules/
 .DS_Store
 *.log
 *.tgz
+
+# This repo's own local dogfooding state (juntia init/analyze/route run against
+# its own working tree) — instance data, never source, never committed.
+.juntia/

@@ -4,9 +4,10 @@ This document defines the boundary between Juntia and any AI coding runtime it i
 integration now exists (`juntia integrate claude-code`, Phase 12L), one real orchestrator coordinates it into
 onboarding (`juntia setup`, Phase 13A), and — as of Phase 13D — Juntia no longer executes an AI runtime
 internally at all: it prepares context (facts, decisions), a handoff (`.juntia/agent-instructions.md`, Phase
-13D), and, as of Phase 14A, a governance layer (`.juntia/agent-rules.md`, `.juntia/workflows.md`) for
-whichever agent the user already has open. Everything else on this page not explicitly marked **built**
-remains design, not implementation.
+13D), and a Knowledge Layer (`.juntia/governance/` — rules, workflows, roles, skills; Phase 14A's
+`agent-rules.md`/`workflows.md` moved here and became static declarative files in Phase 15B) for whichever
+agent the user already has open. Everything else on this page not explicitly marked **built** remains design,
+not implementation.
 
 ## Source of truth
 
@@ -43,21 +44,24 @@ around:
   ├── context.md                <- what this project is: confirmed facts + confirmed decisions (Phase 12K)
   ├── DECISIONS.md               <- what's been decided, and why (human-facing narrative; appended to by `confirm`)
   ├── RULES.md                   <- this project's OWN constraints, human-authored (Phase 00-era scaffold, never auto-written)
-  ├── agent-rules.md             <- how an agent should behave — Juntia's own standing policy (GENERATED, Phase 14A)
-  ├── workflows.md               <- recommended sequence per kind of work (GENERATED, Phase 14A)
   ├── agent-instructions.md      <- how to propose a new interpretation, and where (GENERATED, Phase 13D)
   ├── PROJECT_STATE.md
-  └── roles/
+  └── governance/                <- the Knowledge Layer (SCAFFOLDED once, Phase 15B — see "The Knowledge Layer" below)
+        ├── rules/agent-rules.md      <- how an agent should behave — Juntia's own standing policy
+        ├── workflows/*.md             <- recommended process per kind of work (feature-development, bug-fix, investigation, refactor)
+        ├── roles/*.md                  <- the perspective to reason from (product, architect, engineer, qa)
+        └── skills/*/SKILL.md            <- specialized procedures (feature-planning, architecture-review, implementation, testing-strategy)
 
-CLAUDE.md                    <- generated governance INDEX, Claude Code-specific (BUILT, Phase 12L; evolved Phase 14A)
+CLAUDE.md                    <- generated governance INDEX, Claude Code-specific (BUILT, Phase 12L; evolved Phase 14A/15B)
 AGENTS.md                    <- generated pointer, Codex-specific (not built — see below)
 GEMINI.md                    <- generated pointer, Gemini-specific (not built — see below)
 ```
 
-`agent-rules.md`/`workflows.md` answer "how should an agent behave here," never "what is this project" —
-deliberately not named `rules.md`/`RULES.md`, since `.juntia/RULES.md` already exists as a distinct,
-human-authored, project-specific constraints file (see `templates/RULES.md`) that this module never writes to
-— different author, different content, different update cadence. See "Agent Governance" below.
+`.juntia/governance/` answers "how should an agent behave here," never "what is this project" — its `rules/`
+subdirectory is deliberately not named `rules.md`/`RULES.md` at the top level, since `.juntia/RULES.md`
+already exists as a distinct, human-authored, project-specific constraints file (see `templates/RULES.md`)
+that nothing under `governance/` ever writes to — different author, different content, different update
+cadence. See "The Knowledge Layer" below.
 
 A generated adaptation is a small **pointer**, not a copy — it tells the runtime where to look, it never
 duplicates `context.md`'s own content. It is disposable and regeneratable: editing a generated file directly
@@ -73,34 +77,32 @@ files at project roots (`app-podcaster`'s and `restaurant-game`'s, both found du
 real-project validation) — first-party evidence, not documentation lookup, for exactly the convention this
 phase needed.
 
-The generated file is short and content-free by design — as of Phase 14A, a governance INDEX naming every
-real file, not a copy of any of them:
+The generated file is short and content-free by design. Through Phase 14A/15B it grew into a full governance
+INDEX, naming every real file directly — real, but exactly what Phase 15D's own brief says an entry point must
+never be ("no debe decir 'lee todos estos archivos siempre'"). Phase 15D shrinks it back to a real bootstrap
+*trigger*, moving the index one level deeper into `.juntia/BOOTSTRAP.md` (see "The Workflow Routing Engine"
+below):
 
 ```markdown
 <!-- juntia:generated -->
 # Claude Code instructions
 
-Juntia is configured for this project. The files below are the real, current source of truth —
-nothing here is a copy of their content, only where to find it.
+This project uses Juntia Governance — a deterministic layer that classifies work and points you at
+the right process, context, roles, and skills. It never reasons for you and never implements anything.
 
-- `.juntia/context.md` — what this project is: confirmed facts, technologies, structure.
-- `.juntia/DECISIONS.md` — what has already been decided, and why. Confirmed only by a human, via
-  `juntia confirm`.
-- `.juntia/agent-rules.md` — how to work in a Juntia-governed project: analyze before modifying,
-  respect confirmed decisions, ask when something conflicts.
-- `.juntia/workflows.md` — the recommended sequence for a new feature or a bug fix.
-- `.juntia/agent-instructions.md` — if asked to interpret or analyze this project for Juntia, follow
-  this: the expected response format, how to cite evidence, and where to write your proposal
-  (`.juntia/pending.json`) so Juntia can validate it and ask a human to confirm it.
-
-Juntia does not control what you do — it defines the environment you work in. You reason within it.
+Load `.juntia/BOOTSTRAP.md` before acting on any request in this project. It explains what to read for
+a first session, how to get the workflow/roles/skills that actually apply to a specific request
+(`juntia route`), and where everything else lives — you should not need to read the whole Knowledge
+Layer up front.
 
 Generated by `juntia integrate claude-code` — safe to delete and regenerate any time. Never
 hand-edit it directly: real corrections belong in `.juntia/`, made via `juntia confirm`.
 ```
 
-`.juntia/RULES.md` is listed too, but only when it actually exists — never claimed if the project never ran
-`init`, and never presented as Juntia-authored, since a human is its real author.
+Real, checkable properties of this new shape: the content is now identical for every project (it no longer
+varies by whether `.juntia/RULES.md` exists — that awareness moved to `BOOTSTRAP.md`), and no individual
+governance file (`context.md`, `DECISIONS.md`, `agent-rules.md`, `agent-instructions.md`, ...) is named here
+at all — verified directly by test (`test/agent-integration.test.js`), not just described in prose.
 
 The leading HTML comment is a real, checkable marker — not a convention taken on faith. `integrate` refuses
 to overwrite a `CLAUDE.md` that doesn't start with it, printing why instead of guessing. This was validated
@@ -119,30 +121,161 @@ left undocumented-as-built specifically because this phase had no equivalent fir
 own conventions the way it did for Claude Code's — building one from general knowledge instead of real,
 observed usage would be exactly the kind of unevidenced guess this migration has avoided since Phase 03.
 
-## Agent Governance (Phase 14A) — memory vs. behavior
+## The Knowledge Layer (Phase 14A → Phase 15B) — memory, behavior, and where it lives
 
 Phase 13D gave a connected agent memory: real facts, real confirmed decisions, a real handoff for producing a
 new interpretation. None of that guarantees the agent *behaves* consistently with it — analyzing before
 modifying, respecting a decision it could technically ignore, asking rather than guessing when a request
-conflicts with something already settled. Phase 14A is that second half: `.juntia/agent-rules.md` and
-`.juntia/workflows.md` (`lib/project-intelligence/agent-governance.js`), generated alongside the handoff file
-by `juntia integrate`/`setup`.
+conflicts with something already settled. Phase 14A built that second half as two generated files
+(`.juntia/agent-rules.md`, `.juntia/workflows.md`); Phase 15B moved that same responsibility into
+`.juntia/governance/` — a real, declarative directory (`rules/`, `workflows/`, `roles/`, `skills/`,
+`conventions/`) instead of individual generated files, per Phase 15A's own audit finding that this content
+was Knowledge Layer material trapped in JS string builders (`lib/project-intelligence/agent-governance.js`,
+removed this phase).
 
-Both are **fixed, deterministic content — the same for every project, no AI involved, no per-project
-derivation**. This is deliberate, not a limitation worked around: these are Juntia's own standing rules for
-how *any* connected agent should operate in a Juntia-governed project, not a summary of this specific
-project's own facts (that's `context.md`) and not a log of what's already been decided (that's
-`DECISIONS.md`). "Generated by Juntia, never invented by Claude" only makes sense as a guarantee if the
-content really is fixed and Juntia-authored — an AI-derived "rules" file would just be a second, unvalidated
-interpretation layer, exactly what Phase 13D retired Juntia *from* being.
+Every file under `governance/` is now **scaffolded once by `juntia init`** (directly, or via
+`integrate`/`setup`, which call it), copied verbatim from `templates/governance/`, using the exact same
+never-overwrite mechanism every other scaffold file (`RULES.md`, `roles/*.md` before this phase) already had
+— not generated fresh from a JS template-literal builder on every `integrate` call, the way
+`agent-rules.md`/`workflows.md` used to be. **This is a real, deliberate trade-off, not an oversight**: the
+old model guaranteed every project always had Juntia's current, canonical rules (regenerated every run); the
+new model means a project's own copy is genuinely theirs to edit once scaffolded, and won't reflect a future
+Juntia version's changes to the default content unless the project re-scaffolds by hand. The brief's own
+framing — "artefactos declarativos versionables" — treats this as the correct trade-off: a Knowledge Layer
+file is meant to be a project's own, adaptable artifact, not a value Juntia continuously re-asserts.
+
+Four workflows are scaffolded (`feature-development.md`, `bug-fix.md`, `investigation.md`, `refactor.md`),
+each naming its own goal, when to use it, the roles and skills involved, expected outputs, and a recommended
+governance level (LIGHT/STANDARD/STRICT, per Phase 15A's own conceptual definition) — process, never a
+solution. Four skills are scaffolded (`feature-planning`, `architecture-review`, `implementation`,
+`testing-strategy`, one per role), each a `SKILL.md` with YAML frontmatter (`name`, `description`, `role`,
+`when_to_use`, `inputs`, `process`, `expected_output`, `constraints`) plus a short prose explanation — no
+skill engine reads or executes this format; it's read directly by whichever agent is doing the work. Roles
+(`product.md`, `architect.md`, `engineer.md`, `qa.md`) are the same Phase 00-era content, moved (not
+rewritten) from `.juntia/roles/` to `.juntia/governance/roles/`. `conventions/` is scaffolded with a contract
+explanation only (`README.md`) — no real convention content existed anywhere to migrate.
 
 `juntia integrate` (and `setup`, which calls it) evolved `CLAUDE.md` from a two-file pointer (`context.md`,
 `agent-instructions.md`) into a real governance **index** naming every file this project has — `context.md`,
-`DECISIONS.md`, `RULES.md` (if it exists), `agent-rules.md`, `workflows.md`, `agent-instructions.md` — never
-copying any of their content into `CLAUDE.md` itself. The philosophy this phase holds to explicitly: **Juntia
-does not control what an agent does — it defines the environment the agent works in.** No obedience
-guarantee is claimed or attempted; the goal is reduced contradiction and reduced context loss across
-sessions, not a correctness guarantee a model's own judgment can still override.
+`DECISIONS.md`, `RULES.md` (if it exists), `.juntia/governance/` (with its own sub-bullets for rules/
+workflows/roles/skills), `agent-instructions.md` — never copying any of their content into `CLAUDE.md` itself.
+**Superseded by Phase 15D**: that index now lives in `.juntia/BOOTSTRAP.md` instead, and `CLAUDE.md` shrank
+back to a single real trigger pointing at it — see "The Agent Consumption Model (Phase 15D)" below for why an
+entry point that names everything directly turned out to be the wrong shape, and what replaced it. The
+philosophy this phase holds to explicitly: **Juntia does not control what an agent does — it defines the
+environment the agent works in.** No obedience guarantee is claimed or attempted; the goal is reduced
+contradiction and reduced context loss across sessions, not a correctness guarantee a model's own judgment can
+still override.
+
+**Compatibility, not destructive migration**: a project that scaffolded `.juntia/roles/*.md`,
+`.juntia/agent-rules.md`, or `.juntia/workflows.md` under the old (pre-15B) scheme keeps them exactly as they
+are — nothing in this codebase deletes, moves, or rewrites them. Re-running `init`/`integrate`/`setup` on such
+a project scaffolds the new `.juntia/governance/` tree alongside the old files (never instead of them,
+because `init` only ever creates a file that doesn't already exist at its own path); `CLAUDE.md`'s regenerated
+index stops referencing the old paths, since the new ones are now the real source of truth. A developer who
+wants to fully retire the old files can review and remove them by hand; automating that removal was
+considered and rejected (see `phases/15b-knowledge-layer.md`) — deleting a file that might have been
+hand-edited without knowing so would be a real, avoidable data-loss risk.
+
+## The Workflow Routing Engine (Phase 15C) — connecting Core to the Knowledge Layer
+
+Phase 15B built the Knowledge Layer as real, declarative files — but nothing in the codebase yet turned a
+developer's actual request into a real read of that content; a project's `.juntia/governance/workflows/*.md`
+existed for an agent to happen to open, not for Juntia to route toward. Phase 15C closes that gap with
+`juntia route "<request>"`, built from three small, composed modules under `lib/governance/`:
+
+- `intent-model.js` — `classifyTaskIntent(text)`. A four-intent classifier (`feature`/`bug`/`investigation`/
+  `refactor`, mapped 1:1 to the four real workflow files Phase 15B shipped), numeric `[0, 1]` confidence
+  instead of a string label, and `unknown` — with `needsClarification: true` — whenever there isn't enough
+  signal, the top two candidates tie, or confidence falls below a threshold. Deliberately not an extension of
+  the legacy `lib/intent-router.js`'s nine-intent taxonomy (see that file's own Phase 15C note).
+- `workflow-knowledge.js` — `resolveWorkflowForIntent(projectRoot, intent)`. Reads the real
+  `.juntia/governance/workflows/<file>.md` for a classified intent and parses its already-existing
+  `## Roles involved` / `## Skills recommended` / `## Recommended governance level` sections — the same
+  structure `test/knowledge-layer.test.js` already required every workflow file to have since Phase 15B. No
+  template file was changed to make this parseable; it already was. The only thing hardcoded in JS is the
+  intent → filename correspondence (`INTENT_WORKFLOW_FILE`), never a workflow's roles/skills/governance level.
+- `workflow-router.js` — `routeWorkflow(text, projectRoot)`. Composes the two above into the real contract:
+  `{ intent, confidence, workflow, governanceLevel, roles, skills, needsClarification, reason }`. Never invents
+  a workflow: an `unknown` intent, or a real intent whose Knowledge Layer file can't be resolved (project never
+  ran `init`, or a hand-edited file this parser can't read), both return `workflow: null` and
+  `needsClarification: true`.
+- `governance-levels.js` — a small, extensible LIGHT/STANDARD/STRICT registry (label, description, examples,
+  `mayRequireRoles`, `humanConfirmationRequired`). Not a risk classifier — the level a request actually gets is
+  always read from its resolved workflow file, never computed here. Per this phase's own explicit restriction:
+  "no crear todavía una clasificación perfecta de riesgo."
+
+`juntia route` prints the JSON result and, only when a real workflow was resolved, writes
+`.juntia/task-handoff.md` (`lib/governance/task-handoff.js`) — a second, distinct handoff alongside
+`agent-instructions.md` (Phase 13D): that file answers "what is this project," this one answers "what should I
+do with *this* request" (task type, workflow, governance level, suggested roles/skills, then pointers — never
+copies — to `.juntia/governance/workflows/<workflow>.md`, the relevant role/skill files, and `context.md`/
+`DECISIONS.md`). Same "pointer, not a copy" discipline as every other generated file in this codebase.
+
+**What this still doesn't do**, per the phase's own explicit restrictions: no role is automatically invoked, no
+skill is executed, no workflow runs anything — `route` only *names* the process; an external agent still reads
+`.juntia/governance/` and `task-handoff.md` and decides, reasons, and implements entirely on its own. The
+legacy free-text reasoning modules (`lib/intent-router.js`, `product-reasoning.js`, `architecture-reasoning.js`,
+`engineering-reasoning.js`, `intent-runtime-bridge.js`) remain exactly as unwired as Phase 15A/15B left them —
+this phase built a real, smaller, differently-scoped classifier rather than extending or retiring them. See
+`phases/15c-workflow-routing.md` for the full account.
+
+## The Agent Consumption Model (Phase 15D) — Juntia Bootstrap, Agent Context, and a real Claude Code contract
+
+Phase 15C connected Juntia Core to the Knowledge Layer; nothing yet defined *how an external agent consumes*
+that connection without a human explaining the whole architecture manually, every session. Phase 15D closes
+that gap with three additions, none of them a new reasoning capability — all of them presentation and
+discovery over what Phase 15C already computes.
+
+**`.juntia/BOOTSTRAP.md` (new, `lib/governance/bootstrap.js`)** — the real navigation index that used to live
+directly inside `CLAUDE.md`. Explains, in order: what Juntia is (one paragraph, the same "classifies, never
+reasons or implements" boundary every generated file in this codebase states); what to read once per session
+for a first-time orientation (`context.md`, `PROJECT_STATE.md`, `DECISIONS.md`, and `RULES.md` only when it
+exists); how to get the workflow/roles/skills for a *specific* request (`juntia route`, never "read everything
+up front"); and a short, final pointer list to the Knowledge Layer's own subdirectories and
+`agent-instructions.md`. Regenerated on every `integrate`/`route` call — the same "always current, never
+hand-edited" policy `agent-instructions.md`/`CLAUDE.md` already had, not the Knowledge Layer's own
+"scaffold once" one, since this file only ever describes real, current filesystem state (does `RULES.md`
+exist, does a task handoff already exist), never a project's own opinion. `CLAUDE.md` itself shrank to a
+single real trigger pointing here — see "A real integration: Claude Code" above for its exact new shape.
+
+**Agent Context (new, `lib/governance/agent-context.js`)** — a pure, additive reshaping of `routeWorkflow()`'s
+flat Phase 15C result into the brief's own exact nested contract:
+
+```json
+{
+  "task": { "intent": "feature", "confidence": 0.9, "needsClarification": false, "reason": "..." },
+  "workflow": { "name": "feature-development", "governanceLevel": "standard" },
+  "roles": ["product", "architect", "engineer", "qa"],
+  "skills": ["feature-planning", "architecture-review", "implementation", "testing-strategy"],
+  "contextSources": [".juntia/context.md", ".juntia/governance/workflows/feature-development.md"]
+}
+```
+
+`contextSources` is deliberately minimal — `context.md` always, plus the resolved workflow's own file when one
+was resolved — never an exhaustive index of every role/skill file (an agent already has those from `roles`/
+`skills` plus the Knowledge Layer's own well-known directory convention). This is the object `juntia route`
+now prints to the console (Phase 15C printed `routeWorkflow()`'s flat shape directly; the flat shape is
+unchanged as `route`'s programmatic return value, only the console/task-handoff presentation changed), and the
+same object is embedded as a fenced JSON block inside `.juntia/task-handoff.md`'s own new "## Agent Context"
+section — real navigation, machine-parseable, never a solution.
+
+**Claude Code as the first, real consumer, `.juntia/` as the only source of truth** — checked directly, not
+just asserted: nothing in `agent-integration.js`, `bootstrap.js`, or `task-handoff.js` ever reads from a
+`.claude/` directory or any Claude-Code-specific state; every one of those modules only ever reads real
+`.juntia/` files (or their own existence) and writes a runtime-specific *adapter* file (`CLAUDE.md` at the
+project root, which is Claude Code's own root-level convention, not part of its `.claude/` settings
+directory). No `.claude/`-directory generation was built this phase — the same "no first-party evidence yet
+for this convention" discipline Phase 12L already applied to Codex/Gemini/Cursor; if a real, evidenced need for
+Claude-Code-specific adapter content under `.claude/` appears later, it would be generated *from* `.juntia/`
+state, never the reverse, and `.juntia/` would remain readable and complete on its own regardless.
+
+**What this phase did not build**, per its own explicit restrictions: no automatic role invocation, no skill
+execution, no automatic role switching, no Claude plugin integration, no Codex/Cursor integration, no learning
+mechanism, no automatic modification of governance content. `juntia route` was kept (not removed) as a real,
+advanced debugging command — the primary experience (`setup` → an agent opening `CLAUDE.md` → `BOOTSTRAP.md`
+→, if needed, that agent itself running `route`) does not require a developer to type it manually. See
+`phases/15d-agent-consumption-model.md` for the full account.
 
 ## The Setup Orchestrator (Phase 13A)
 
@@ -193,9 +326,11 @@ generates; Juntia's own logic decides what happens with the result. `integrate` 
 never sends anything to an external service, and never modifies project source code, `.juntia/facts.json`,
 `.juntia/decisions.json`, `.juntia/pending.json`, or `.juntia/context.md` — it only ever reads `context.md`
 (to confirm it exists before generating a pointer to it) and writes the runtime pointer file, its own
-bookkeeping line in `config.yml`, and the generated governance files (`agent-instructions.md`,
-`agent-rules.md`, `workflows.md`) — all fully regeneratable, none a second source of truth for anything
-`.juntia/`'s own real stores already hold.
+bookkeeping line in `config.yml`, the generated handoff file (`agent-instructions.md` — fully regeneratable,
+no second source of truth), and — via `init`, only if not already present — the `.juntia/governance/`
+Knowledge Layer tree, scaffolded once from static templates and never a second source of truth for anything
+`.juntia/`'s own real stores already hold, but (unlike `agent-instructions.md`) not regenerated on every run
+once it exists — see "The Knowledge Layer" above for why.
 
 ## Two separate configuration concerns — do not conflate them
 

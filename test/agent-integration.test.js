@@ -88,22 +88,34 @@ test('a real, human-authored file (no marker) is never mistaken for Juntia-gener
 
 // --- buildPointerContent as a governance index (Phase 14A) -------------------
 
-test('buildPointerContent indexes every real governance file, and states Juntia is configured', () => {
+// Phase 15D: `buildPointerContent` shrank from a full governance INDEX
+// (every file named individually) to a real entry point — it must state
+// that the project uses Juntia Governance and point at
+// `.juntia/BOOTSTRAP.md`, but must NOT enumerate `context.md`/
+// `DECISIONS.md`/`governance/rules|workflows|roles|skills`/
+// `agent-instructions.md` individually anymore; that index now lives one
+// level deeper, in `lib/governance/bootstrap.js` (see test/bootstrap.test.js).
+test('buildPointerContent is a real entry point — states Juntia Governance is active and points at BOOTSTRAP.md, never an index of individual files', () => {
   const content = buildPointerContent(RUNTIME_PROFILES['claude-code'], 'claude-code');
-  assert.match(content, /Juntia is configured for this project/);
-  assert.match(content, /\.juntia\/context\.md/);
-  assert.match(content, /\.juntia\/DECISIONS\.md/);
-  assert.match(content, /\.juntia\/agent-rules\.md/);
-  assert.match(content, /\.juntia\/workflows\.md/);
-  assert.match(content, /\.juntia\/agent-instructions\.md/);
+  assert.match(content, /Juntia Governance/);
+  assert.match(content, /\.juntia\/BOOTSTRAP\.md/);
+  for (const individualFile of [
+    '.juntia/context.md', '.juntia/DECISIONS.md', '.juntia/RULES.md',
+    'rules/agent-rules.md', '.juntia/agent-instructions.md',
+  ]) {
+    assert.doesNotMatch(content, new RegExp(individualFile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `CLAUDE.md must not name ${individualFile} directly anymore — that's BOOTSTRAP.md's job`);
+  }
 });
 
-test('buildPointerContent mentions .juntia/RULES.md only when hasProjectRules is true', () => {
-  const without = buildPointerContent(RUNTIME_PROFILES['claude-code'], 'claude-code');
-  assert.doesNotMatch(without, /\.juntia\/RULES\.md/);
-
-  const withRules = buildPointerContent(RUNTIME_PROFILES['claude-code'], 'claude-code', { hasProjectRules: true });
-  assert.match(withRules, /\.juntia\/RULES\.md/);
+// Phase 15D: buildPointerContent no longer takes a third `{ hasProjectRules }`
+// options argument at all — RULES.md-awareness moved entirely to
+// `lib/governance/bootstrap.js` (see test/bootstrap.test.js). Calling it
+// with an extra argument is simply ignored, proving the content no longer
+// varies by project state — CLAUDE.md is now the same for every project.
+test('buildPointerContent produces identical output regardless of project state — it no longer varies by what exists on disk', () => {
+  const withoutExtra = buildPointerContent(RUNTIME_PROFILES['claude-code'], 'claude-code');
+  const withIgnoredExtra = buildPointerContent(RUNTIME_PROFILES['claude-code'], 'claude-code', { hasProjectRules: true });
+  assert.equal(withoutExtra, withIgnoredExtra);
 });
 
 test('buildPointerContent never copies content from any of the files it indexes — only names them', () => {
@@ -139,12 +151,12 @@ test('a successful integration creates CLAUDE.md at the project ROOT, not inside
   assert.ok(fs.existsSync(path.join(root, 'CLAUDE.md')));
 });
 
-test('CLAUDE.md points to .juntia/context.md and never duplicates its content', () => {
+test('CLAUDE.md points to .juntia/BOOTSTRAP.md and never duplicates any project content', () => {
   const root = tempProject();
   withRealJuntiaDir(root);
   integrateRuntime(root, 'claude-code');
   const content = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
-  assert.match(content, /\.juntia\/context\.md/);
+  assert.match(content, /\.juntia\/BOOTSTRAP\.md/);
   assert.doesNotMatch(content, /No decisions confirmed yet/, 'must not copy context.md\'s own content');
 });
 
@@ -201,7 +213,13 @@ test('integrateRuntime never touches facts.json, decisions.json, pending.json, o
   assert.equal(fs.readFileSync(path.join(root, '.juntia', 'context.md'), 'utf8'), before.context);
 });
 
-test('integrateRuntime detects a real, existing .juntia/RULES.md and references it in the generated CLAUDE.md', () => {
+// Phase 15D: RULES.md-awareness moved from CLAUDE.md itself to
+// `.juntia/BOOTSTRAP.md` (`lib/governance/bootstrap.js`, wired in by
+// `bin/juntia.js`'s `runIntegrate`, not by this lower-level `integrateRuntime`
+// — see test/bootstrap.test.js for the real, RULES.md-aware coverage).
+// This test now documents the negative: CLAUDE.md's own content is
+// unaffected by RULES.md existing, proving the two concerns stayed separate.
+test('CLAUDE.md itself no longer varies when .juntia/RULES.md exists — that awareness lives in BOOTSTRAP.md now', () => {
   const root = tempProject();
   withRealJuntiaDir(root);
   writeFile(root, '.juntia/RULES.md', '# Rules\n\n## Technical constraints\n\n- Must run on Node 18+\n');
@@ -209,7 +227,7 @@ test('integrateRuntime detects a real, existing .juntia/RULES.md and references 
   integrateRuntime(root, 'claude-code');
 
   const content = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
-  assert.match(content, /\.juntia\/RULES\.md/);
+  assert.doesNotMatch(content, /\.juntia\/RULES\.md/);
 });
 
 test('works with runtime.provider left at null — integrate never reads or requires it', () => {

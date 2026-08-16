@@ -45,7 +45,7 @@ test('no runtime argument -> refused with usage guidance, nothing written', () =
   assert.equal(fs.existsSync(path.join(root, '.juntia')), false);
 });
 
-test('when a real, human-authored CLAUDE.md blocks integration, agent-rules.md/workflows.md are not created either', () => {
+test('when a real, human-authored CLAUDE.md blocks integration, the runtime-specific pointer is refused but the Knowledge Layer is still scaffolded (Phase 15B: init() runs first, unconditionally)', () => {
   const root = tempProject();
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
   writeFile(root, 'CLAUDE.md', '# Our real team conventions\n\nDo not touch.\n');
@@ -56,8 +56,13 @@ test('when a real, human-authored CLAUDE.md blocks integration, agent-rules.md/w
     const result = silently(() => runIntegrate('claude-code', root));
 
     assert.equal(result.ok, false);
-    assert.equal(fs.existsSync(path.join(root, '.juntia', 'agent-rules.md')), false);
-    assert.equal(fs.existsSync(path.join(root, '.juntia', 'workflows.md')), false);
+    // Knowledge Layer content is runtime-agnostic — it no longer depends on
+    // whether a specific runtime's pointer file could be generated. This is
+    // a real, deliberate behavior change from Phase 14A (see
+    // phases/15b-knowledge-layer.md): a project with its own real CLAUDE.md
+    // used to never receive agent-rules.md/workflows.md at all.
+    assert.ok(fs.existsSync(path.join(root, '.juntia', 'governance', 'rules', 'agent-rules.md')));
+    assert.ok(fs.existsSync(path.join(root, '.juntia', 'governance', 'workflows', 'feature-development.md')));
   })();
 });
 
@@ -151,7 +156,7 @@ test('integrate generates .juntia/agent-instructions.md alongside the runtime po
   })();
 });
 
-test('integrate generates .juntia/agent-rules.md and .juntia/workflows.md alongside the runtime pointer file (Phase 14A)', () => {
+test('integrate generates .juntia/BOOTSTRAP.md alongside the runtime pointer file (Phase 15D)', () => {
   const root = tempProject();
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
 
@@ -160,12 +165,58 @@ test('integrate generates .juntia/agent-rules.md and .juntia/workflows.md alongs
     silently(() => runContext(root));
     silently(() => runIntegrate('claude-code', root));
 
-    assert.ok(fs.existsSync(path.join(root, '.juntia', 'agent-rules.md')));
-    assert.ok(fs.existsSync(path.join(root, '.juntia', 'workflows.md')));
+    const bootstrapPath = path.join(root, '.juntia', 'BOOTSTRAP.md');
+    assert.ok(fs.existsSync(bootstrapPath));
+    const content = fs.readFileSync(bootstrapPath, 'utf8');
+    assert.match(content, /governance\/workflows\//);
+    assert.match(content, /juntia route/);
   })();
 });
 
-test('CLAUDE.md points to .juntia/agent-instructions.md as the analysis guide, not a copy of it', () => {
+test('a project with an old (pre-15D), Juntia-generated CLAUDE.md — the full governance-index shape — is safely regenerated into the new minimal entry point (Phase 15D)', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
+  writeFile(root, 'CLAUDE.md', [
+    '<!-- juntia:generated -->',
+    '# Claude Code instructions',
+    '',
+    'Juntia is configured for this project. The files below are the real, current source of truth —',
+    'nothing here is a copy of their content, only where to find it.',
+    '',
+    '- `.juntia/context.md` — what this project is.',
+    '- `.juntia/governance/` — the Knowledge Layer: how to work in this project.',
+    '',
+  ].join('\n'));
+
+  return (async () => {
+    await silently(() => runAnalyze(root));
+    silently(() => runContext(root));
+    const result = silently(() => runIntegrate('claude-code', root));
+
+    assert.equal(result.ok, true, 'a Juntia-generated file (marker present) must be safely regenerated, not refused');
+    const claudeMd = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+    assert.match(claudeMd, /\.juntia\/BOOTSTRAP\.md/);
+    assert.doesNotMatch(claudeMd, /\.juntia\/governance\//, 'the old index content must not survive regeneration');
+  })();
+});
+
+test('integrate scaffolds the Knowledge Layer (.juntia/governance/) alongside the runtime pointer file (Phase 14A rules/workflows; Phase 15B moved them to declarative files)', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
+
+  return (async () => {
+    await silently(() => runAnalyze(root));
+    silently(() => runContext(root));
+    silently(() => runIntegrate('claude-code', root));
+
+    assert.ok(fs.existsSync(path.join(root, '.juntia', 'governance', 'rules', 'agent-rules.md')));
+    assert.ok(fs.existsSync(path.join(root, '.juntia', 'governance', 'workflows', 'feature-development.md')));
+    assert.ok(fs.existsSync(path.join(root, '.juntia', 'governance', 'roles', 'product.md')));
+    assert.ok(fs.existsSync(path.join(root, '.juntia', 'governance', 'skills', 'implementation', 'SKILL.md')));
+  })();
+});
+
+test('CLAUDE.md points to .juntia/BOOTSTRAP.md, which in turn points at agent-instructions.md — neither copies its content (Phase 15D)', () => {
   const root = tempProject();
   writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.60.0' } }));
 
@@ -175,8 +226,12 @@ test('CLAUDE.md points to .juntia/agent-instructions.md as the analysis guide, n
     silently(() => runIntegrate('claude-code', root));
 
     const claudeMd = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
-    assert.match(claudeMd, /agent-instructions\.md/);
-    assert.doesNotMatch(claudeMd, /id:\[dependency:phaser\]/, 'CLAUDE.md must point at the handoff file, never copy its content');
+    assert.match(claudeMd, /BOOTSTRAP\.md/);
+    assert.doesNotMatch(claudeMd, /id:\[dependency:phaser\]/, 'CLAUDE.md must never copy fact content');
+
+    const bootstrapMd = fs.readFileSync(path.join(root, '.juntia', 'BOOTSTRAP.md'), 'utf8');
+    assert.match(bootstrapMd, /agent-instructions\.md/);
+    assert.doesNotMatch(bootstrapMd, /id:\[dependency:phaser\]/, 'BOOTSTRAP.md must point at the handoff file, never copy its content');
   })();
 });
 

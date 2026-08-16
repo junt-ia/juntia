@@ -158,11 +158,11 @@ test('the assistant prompt lists planned providers as visibly unavailable, never
   assert.match(output, /Cursor \(coming soon\)/);
 });
 
-test('once an assistant is configured, setup tells the user to open it and follow the handoff instructions', async () => {
+test('once an assistant is configured, setup tells the user to open it — never naming a specific file to read manually (Phase 15D: the assistant discovers what it needs via CLAUDE.md -> BOOTSTRAP.md)', async () => {
   const root = tempProject();
   writeFile(root, 'package.json', '{}');
   const { output } = await captureLog(() => runSetup(root, { prompt: scriptedPrompt(['1']) }));
-  assert.match(output, /Open Claude Code and ask it to follow \.juntia\/agent-instructions\.md/);
+  assert.match(output, /Open Claude Code — it will find CLAUDE\.md/);
 });
 
 // --- protecting existing files ------------------------------------------------
