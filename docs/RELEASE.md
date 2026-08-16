@@ -1,8 +1,8 @@
 # Release process
 
 How `@juntia/juntia` gets from a commit on `main` to something a developer can `npm install` in a real
-project — and the decisions behind why it works this way. Phase 12M built this; no version has been
-published yet (see [`CHANGELOG.md`](../CHANGELOG.md)).
+project — and the decisions behind why it works this way. Phase 12M built this; Phase 12M.5 made the first
+real publish. See [`CHANGELOG.md`](../CHANGELOG.md) for exactly which versions are live on npm.
 
 ## The two workflows
 

@@ -10,6 +10,16 @@ Nothing yet.
 
 ## [0.8.0] - 2026-08-16
 
+**The first public beta release.** Consolidates Phases 15B (Knowledge Layer), 15C (Workflow Routing Engine),
+and 15D (Agent Consumption Model) — Phases 0.6.0/0.7.0 were completed and documented individually but never
+published; this is the first version published to npm since `0.5.0`. Known beta limitations: no real session
+has been run with a live AI agent following the generated handoff/bootstrap files end to end; only Claude Code
+is a real, built integration; no automatic role invocation or skill execution; governance levels are a static
+per-workflow default, not a dynamic risk classifier; the legacy free-text reasoning modules
+(`classifyIntent`/`analyzeProduct`/`analyzeArchitecture`/`analyzeEngineering`/`interpretIntent`) remain
+exported for compatibility but are not part of the current architecture's direction. See
+[`README.md`](README.md#status) for the full, current list.
+
 Agent Consumption Model: Phase 15C connected Juntia Core to the Knowledge Layer; this phase defines the real
 contract an external agent uses to consume that connection, without a human explaining the architecture
 manually every session.

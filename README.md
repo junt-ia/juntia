@@ -1,6 +1,13 @@
 # Juntia
 
-Juntia is a project-local intelligence, context, and governance layer that helps humans and AI runtimes collaborate when building software.
+**Governance layer for AI-assisted development.**
+
+Juntia is not an AI assistant, not an autonomous agent, and not a reasoning engine. It's the deterministic
+layer that sits next to whichever AI coding tool you already use — Claude Code today — and gives it project
+context, memory, decisions, rules, workflows, roles, skills, and a real routing/handoff contract, so that tool
+can work inside your project's actual, accumulated understanding instead of starting cold every session.
+
+The short version: **AI interprets. Juntia governs.**
 
 ## What problem it solves
 
@@ -9,29 +16,63 @@ Juntia helps you:
 - keep project context (product intent, architecture, decisions) alive across sessions instead of re-deriving it every time;
 - reduce information loss between a human's intent and what gets built;
 - make technical and product decisions more explicit before they become code;
-- work better with AI coding assistants, without becoming one itself;
+- give a connected AI agent a real, discoverable process to follow — which workflow applies, which roles and
+  skills matter, what context to read — without a human re-explaining the project's architecture every time;
 - apply consistent engineering practices as a project evolves.
 
 ## What Juntia is not
 
-- **Not a model.** Juntia does not generate code or make predictions itself.
-- **Not a replacement for Claude, Codex, Gemini, or any other AI coding runtime.** It sits alongside them.
-- **Not an autonomous agent.** It does not act on its own; a human stays in the loop for decisions that matter.
+- **Not an AI assistant.** It doesn't chat, answer questions, or generate responses.
+- **Not an autonomous agent.** It never reasons about what to build, never decides a technical solution, never
+  implements anything, and never acts without a human confirming what matters.
+- **Not a reasoning engine.** It classifies the *kind* of work a request is and points at the right process —
+  it does not interpret free text into a plan the way an AI model does.
+- **Not a replacement for Claude Code, Codex, Cursor, or any other AI coding runtime.** It sits alongside them,
+  preparing the environment they work in.
 - **Not an IDE.**
-- **Not tied to one AI provider.** Juntia is designed to work with whichever runtime a developer is already using.
+- **Not tied to one AI provider.** Juntia is designed to work with whichever runtime a developer is already
+  using — Claude Code is the first real integration; others are architecturally supported, not yet built.
 
-The short version: **AI interprets. Juntia governs.**
+## What Juntia provides
+
+- **Context** — what the project is: confirmed facts, technologies, structure (`.juntia/context.md`).
+- **Project memory** — a persisted, diffable factual baseline that survives across sessions.
+- **Decisions** — a real record of what's been confirmed by a human, and why (`.juntia/DECISIONS.md`).
+- **Rules** — both project-specific (`.juntia/RULES.md`, human-authored) and Juntia's own standing governance
+  rules (`.juntia/governance/rules/agent-rules.md`).
+- **Workflows** — the recommended process per kind of work: feature development, bug fix, investigation,
+  refactor (`.juntia/governance/workflows/`).
+- **Roles** — the perspective to reason from for a given piece of work: product, architect, engineer, QA
+  (`.juntia/governance/roles/`).
+- **Skills** — specialized procedures for a given task (`.juntia/governance/skills/`).
+- **Routing** — classifies a free-text request and resolves which workflow/roles/skills/governance level apply
+  (`juntia route`).
+- **Handoff for external agents** — deterministic, generated files (`CLAUDE.md`, `.juntia/BOOTSTRAP.md`,
+  `.juntia/task-handoff.md`) that let a connected agent discover all of the above on its own.
 
 ## Status
 
-Beta (0.x). `@juntia/juntia` is a real, published, installable package: a deterministic reasoning pipeline
-(product/architecture/engineering analysis, intent classification, a validated runtime-escalation bridge), a
-full FACT → INTERPRETATION → CONFIRMATION → DECISION → CONTEXT project-memory cycle, a one-command onboarding
-flow (`juntia setup`), a real Claude Code integration, and a complete, real CI/release pipeline — all
-verified end-to-end against real external projects, not just this repository's own tests. It stays in `0.x`
-deliberately: the user experience is still evolving, real dogfooding beyond this project's own validation
-isn't done yet, and the public API can still change. See [`docs/RELEASE.md`](docs/RELEASE.md) for what
-version numbers mean here and [`CHANGELOG.md`](CHANGELOG.md) for exactly what shipped in each one.
+**Public beta (0.x).** `@juntia/juntia@0.8.0` is the current beta: a deterministic Knowledge Layer (rules,
+workflows, roles, skills), a Workflow Routing Engine connecting free-text requests to that layer, a real Agent
+Consumption Model (`CLAUDE.md` → `.juntia/BOOTSTRAP.md` → `route` → `.juntia/task-handoff.md`) for Claude Code,
+and the full FACT → INTERPRETATION → CONFIRMATION → DECISION → CONTEXT project-memory cycle — all verified
+end-to-end against real external projects and a genuinely external (tarball) install, not just this
+repository's own tests. It stays in `0.x` deliberately: real dogfooding with a live AI agent hasn't been done
+yet, only one runtime (Claude Code) is integrated, and the public API/CLI surface can still change. See
+[`docs/RELEASE.md`](docs/RELEASE.md) for what version numbers mean here and [`CHANGELOG.md`](CHANGELOG.md) for
+exactly what shipped in each one.
+
+**Known limitations of this beta**, named explicitly rather than left implicit:
+
+- No real session has been run with a live AI agent actually following the generated handoff/bootstrap files
+  end to end — the artifact chain is built and tested, but "does a real agent comply with it" remains open.
+- Only Claude Code is a real, built integration; Codex/Gemini/Cursor are architecturally supported, not built.
+- No automatic role invocation or skill execution — Juntia names the process, an agent still has to read and
+  follow it manually.
+- Governance levels (LIGHT/STANDARD/STRICT) are a static per-workflow default, not a dynamic risk classifier.
+- The six legacy free-text reasoning modules (`classifyIntent`, `analyzeProduct`, `analyzeArchitecture`,
+  `analyzeEngineering`, `interpretIntent`) remain in the package for compatibility but are not part of the
+  current architecture's vision — see "Programmatic API" below.
 
 ## Installing
 
@@ -87,6 +128,18 @@ Configuring Claude Code...
 Juntia is ready.
 Open Claude Code — it will find CLAUDE.md and load Juntia's governance from there.
 ```
+
+## The core flow
+
+| Command | What it does |
+|---|---|
+| `juntia setup` | The recommended entrypoint. Creates the Knowledge Layer (`.juntia/governance/`) if it doesn't exist, analyzes the project, and integrates your AI agent — one command, coordinating everything below. |
+| `juntia analyze` | Analyzes the project and updates `.juntia/facts.json` — a deterministic inventory (languages, dependencies, structure), diffed against the previous run. |
+| `juntia update` | **Designed, not built yet.** Intended to sync a project's scaffolded Juntia files after an upgrade, without discarding a developer's own edits — see [`docs/CLI.md`](docs/CLI.md#why-update-isnt-built-yet) for why this isn't real yet. |
+| `juntia route "<request>"` | Advanced command for inspecting the workflow Juntia would select for a given request — which intent, workflow, governance level, roles, and skills apply — useful for debugging the routing/handoff chain directly. Most of the time an AI agent runs this on its own, discovered via `CLAUDE.md`; a developer doesn't need to type it. |
+
+Juntia is designed to work *alongside* whichever AI coding runtime you already have open — it never replaces
+it, never calls it, and never executes any AI model itself. Every command above is fully deterministic.
 
 ### Advanced: the individual commands
 
@@ -148,18 +201,32 @@ See [`docs/CLI.md`](docs/CLI.md) for the full public command surface (`update` s
 [`docs/CONTEXT_SYNTHESIS.md`](docs/CONTEXT_SYNTHESIS.md) / [`docs/RUNTIME_INTEGRATION.md`](docs/RUNTIME_INTEGRATION.md)
 for the full model.
 
-The reasoning core is usable programmatically:
+## Programmatic API
+
+The Workflow Routing Engine that powers `juntia route` is also directly importable — the same, current
+governance surface, not a separate reasoning layer:
 
 ```js
-const { classifyIntent, analyzeProduct, analyzeArchitecture, analyzeEngineering, interpretIntent } = require('@juntia/juntia');
+const { classifyTaskIntent, routeWorkflow } = require('@juntia/juntia');
 
-const intent = classifyIntent('Quiero que los clientes VIP tengan un descuento del 10%');
+const route = routeWorkflow('Implement VIP customers in the restaurant.', process.cwd());
+// -> { intent: 'feature', confidence: 0.9, workflow: 'feature-development', governanceLevel: 'standard',
+//      roles: [...], skills: [...], needsClarification: false, reason: '...' }
 ```
 
-Only this documented surface is importable — `require('@juntia/juntia/lib/...')` (any internal module) is
-blocked by the package's own `exports` map, not just by convention. See [`lib/index.js`](lib/index.js) for
-the exact exported surface. This is a real, tested API, not a stable one yet — Juntia is still in `0.x`
-(see [`docs/RELEASE.md`](docs/RELEASE.md#versioning-while-0x)), so the shape may still change.
+Two older exports (`classifyIntent`, `interpretIntent`) and three (`analyzeProduct`, `analyzeArchitecture`,
+`analyzeEngineering`) remain exported for compatibility — a nine-intent, free-text classifier and a
+product/architecture/engineering reasoning pipeline built early in this project's history, before the current
+Knowledge Layer/routing architecture existed. **They are not part of Juntia's current direction**: attempting
+to interpret *what should be built* is exactly the kind of reasoning Juntia's own governing definition keeps
+out of scope ("AI interprets. Juntia governs."). They're kept, not removed, because removing tested, working,
+still-reachable code without real evidence it's safe to drop would be its own kind of unjustified change — not
+because they're recommended for new use. Prefer `classifyTaskIntent`/`routeWorkflow` for anything new.
+
+Only the documented surface above is importable — `require('@juntia/juntia/lib/...')` (any internal module) is
+blocked by the package's own `exports` map, not just by convention. See [`lib/index.js`](lib/index.js) for the
+exact exported surface. This is a real, tested API, not a stable one yet — Juntia is still in `0.x` (see
+[`docs/RELEASE.md`](docs/RELEASE.md#versioning-while-0x)), so the shape may still change.
 
 ## Where this comes from
 
