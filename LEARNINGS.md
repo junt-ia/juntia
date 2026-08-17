@@ -3,6 +3,39 @@
 Real, evidenced lessons from building Juntia — kept so a later phase doesn't relearn them the hard way.
 Append-only, newest first within each entry's own topic.
 
+## Regenerating the summary file is not the same as regenerating the file the agent is actually reading
+
+`juntia confirm` refreshed `.juntia/context.md` correctly from Phase 12K onward — that was never the bug. The
+real gap a live Snake dogfooding session found was one level over: `.juntia/task-handoff.md`, the file an agent
+is actually mid-task against once work has started, was written once by `route` and never touched again. A
+downstream, "always current" file being correct is not the same claim as "the file the agent will next open is
+current" — those can silently diverge the moment an agent moves from orientation (read once, at session start)
+into an active task (reads a narrower, task-scoped file instead). **Next time:** when adding a state change
+that needs to reach an agent, name the SPECIFIC file the agent reads at the point it needs the information, not
+just "a file that has the right data somewhere in the project."
+
+## Recovering state from an already-embedded structured block avoids duplicating it
+
+`refreshTaskHandoffDecisions` needs to regenerate `task-handoff.md` without re-classifying the request (the
+workflow/roles/skills don't change just because a decision was confirmed) and without blowing the file's own
+pre-existing, tested 5000-byte budget. The first design duplicated the full `route` object into a second,
+separate JSON comment for round-tripping; the actual fix was recovering it from the Agent Context JSON block
+the file already embeds for the agent's own use, via a small, lossless inverse of the function that built it.
+**Next time:** before adding a second copy of structured state to a generated file "just for internal
+round-tripping," check whether the file already carries an equivalent, human-facing copy that can be parsed
+back instead.
+
+## "Applied" is a claim about code Juntia cannot verify — don't persist it as if it could
+
+Distinguishing pending/confirmed/applied decision states was tempting to build as a fourth persisted status,
+settable by an agent once it believes it finished. Rejected: Juntia never patches source code, so it has no way
+to check whether an "applied" flag is actually true — a self-reported one would let a decision look resolved
+without being resolved. Scoping "new" to the current task's own lifetime (a fresh `route` call resets the
+baseline) gives the same practical signal — has this decision had a chance to be acted on yet — without ever
+asserting something about code state Juntia did not check. **Next time:** when a status would require trusting
+an agent's own self-report about code correctness, look for a structural proxy (like task boundaries here)
+before adding the status.
+
 ## "Kept for compatibility" needs an exit condition, not just a label
 
 The legacy reasoning layer sat in the codebase for five phases (15A through this one) marked "legacy, unwired,

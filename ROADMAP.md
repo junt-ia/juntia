@@ -6,15 +6,20 @@ file names candidates and the evidence that would justify each, not commitments.
 
 ## Just landed
 
-Governance level is dynamic (declared signals, not text-inferred); the legacy reasoning layer is fully
-removed. See `CHECKPOINTS.md` and `phases/governance-level-dynamic-and-legacy-cleanup.md`.
+Decision Continuity: `juntia confirm` now refreshes `.juntia/task-handoff.md`, not only `.juntia/context.md`,
+closing the real gap a first live Snake dogfooding session found (a confirmed decision that didn't reliably
+reach the agent mid-task). See `CHECKPOINTS.md` and `phases/decision-continuity.md`.
 
-## What `README.md` already names as open, unresolved by this phase
+## What the first live-agent session found, unresolved by this phase
 
-- **No real live-agent session yet.** The full chain (`CLAUDE.md` → `BOOTSTRAP.md` → `route` →
-  `task-handoff.md`, now including declared governance signals) is built and unit-tested, but "does a real
-  agent actually comply with it, end to end, on a real task" remains genuinely untested. This is the single
-  highest-value next validation — everything else on this list is secondary until it's done at least once.
+- **Re-run the Snake experiment.** This phase closed the mechanism the first session found broken, verified by
+  unit/integration tests reproducing the exact failure mode — it did not itself re-run the live session. Doing
+  that, and checking whether confirmed decisions now actually land in the game's code, is the single
+  highest-value next validation.
+- **No evidence yet that Juntia improves code quality.** All three arms of the Snake experiment (no Juntia,
+  Juntia legacy, current Juntia Governance) passed 11/11 functional checks; the governed arm's real, measured
+  cost was roughly +40% tokens and +47% tool calls. Juntia's demonstrated value so far is governance and
+  decision traceability, not code quality or cost — nothing in this phase, or planned, claims otherwise.
 - **Only one runtime integration (Claude Code) is built.** Codex/Gemini/Cursor are architecturally supported,
   not built — no real evidence yet for any of their own conventions.
 - **`juntia update` is designed, not built** (`docs/CLI.md#why-update-isnt-built-yet`) — needs a real

@@ -54,21 +54,25 @@ Juntia helps you:
 
 ## Status
 
-**Public beta (0.x).** `@juntia/juntia@0.11.0` is the current beta: a deterministic Knowledge Layer (rules,
+**Public beta (0.x).** `@juntia/juntia@0.11.0` is the latest version published on npm; `0.12.0` (Decision
+Continuity) is on `main`, pending a release. The current beta is a deterministic Knowledge Layer (rules,
 workflows, roles, skills, decision triggers, governance signals), a Workflow Routing Engine connecting
 free-text requests to that layer with a dynamic governance level, a real Agent Consumption Model (`CLAUDE.md`
 → `.juntia/BOOTSTRAP.md` → `route` → `.juntia/task-handoff.md`) for Claude Code, and the full
 FACT → INTERPRETATION → CONFIRMATION → DECISION → CONTEXT project-memory cycle — all verified end-to-end
 against real external projects and a genuinely external (tarball) install, not just this repository's own
-tests. It stays in `0.x` deliberately: real dogfooding with a live AI agent hasn't been done yet, only one
-runtime (Claude Code) is integrated, and the public API/CLI surface can still change. See
-[`docs/RELEASE.md`](docs/RELEASE.md) for what version numbers mean here and [`CHANGELOG.md`](CHANGELOG.md) for
-exactly what shipped in each one.
+tests. It stays in `0.x` deliberately: only one runtime (Claude Code) is integrated and the public API/CLI
+surface can still change. See [`docs/RELEASE.md`](docs/RELEASE.md) for what version numbers mean here and
+[`CHANGELOG.md`](CHANGELOG.md) for exactly what shipped in each one.
 
 **Known limitations of this beta**, named explicitly rather than left implicit:
 
-- No real session has been run with a live AI agent actually following the generated handoff/bootstrap files
-  end to end — the artifact chain is built and tested, but "does a real agent comply with it" remains open.
+- A first live-agent session (a three-arm Snake dogfooding experiment) confirmed governance changes real agent
+  behavior — but also that all three arms passed the same functional checks, so there is no evidence yet Juntia
+  improves code quality, at a real, measured cost (~+40% tokens, ~+47% tool calls under governance). It also
+  found a real gap — a confirmed decision not reliably reaching the agent mid-task — closed in
+  [`phases/decision-continuity.md`](phases/decision-continuity.md); the session has not yet been re-run to
+  check whether that fix holds in practice.
 - Only Claude Code is a real, built integration; Codex/Gemini/Cursor are architecturally supported, not built.
 - No automatic role invocation or skill execution — Juntia names the process, an agent still has to read and
   follow it manually.

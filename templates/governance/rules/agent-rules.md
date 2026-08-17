@@ -10,9 +10,13 @@ soften/extend one of the ones below, edit it here directly; Juntia will not sile
 
 - **Analyze before modifying.** Read `.juntia/context.md` (confirmed facts and decisions) before proposing or
   making a change — do not re-derive what Juntia has already established.
-- **Respect confirmed decisions.** A decision in `.juntia/DECISIONS.md` was made deliberately by a human.
-  Don't silently work around, contradict, or re-litigate one — if a change requires it, say so explicitly and
-  ask.
+- **Respect confirmed decisions — including one confirmed after you started the current task.** A decision in
+  `.juntia/DECISIONS.md` was made deliberately by a human. Don't silently work around, contradict, or
+  re-litigate one — if a change requires it, say so explicitly and ask. `.juntia/task-handoff.md`'s own
+  "Confirmed decisions" section is refreshed automatically every time `juntia confirm` records one, and
+  separates what you already knew when this task started from what was confirmed since. Anything in the
+  second group wins over a provisional value you already chose or wrote — re-check your implementation
+  against it before considering the task done, even if it contradicts what you had proposed.
 - **Never introduce a dependency without stating why.** A new dependency is a real, lasting cost — name the
   concrete reason it is needed as part of proposing the change, not after the fact.
 - **Ask when a request conflicts with an existing decision or constraint.** Do not silently choose one side —

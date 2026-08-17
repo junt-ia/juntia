@@ -184,6 +184,35 @@ this phase found no real, evidenced source for those yet, so they're left out en
 with empty scaffolding. (A decision "type" taxonomy — interpretation/product/architecture — did not exist
 when this was originally written; see "Decision types" above for Phase 15F, which closed that specific gap.)
 
+## Decision continuity: reaching the active task, not just `context.md` (Decision Continuity phase)
+
+`context.md` being refreshed on every `confirm` (above) is necessary but was not sufficient — a real, live
+Snake dogfooding session confirmed a decision that genuinely contradicted a provisional value an agent had
+already proposed, and the confirmation never reached the agent: `.juntia/task-handoff.md`, the file the agent
+was actually mid-task against, was written once by `juntia route` and never touched again. Two of four
+confirmed decisions never reached the game's real code because of exactly this gap.
+
+The fix stays inside this same cycle rather than adding a new one: `juntia confirm` now also calls
+`refreshTaskHandoffDecisions` (`lib/governance/task-handoff.js`) whenever `.juntia/task-handoff.md` currently
+exists — the same "regenerate a derived, never-hand-edited file" precedent `route`/`integrate` already
+established for `.juntia/BOOTSTRAP.md`. The regenerated file gains one new section, `## Confirmed decisions`,
+split into:
+
+- **Confirmed since this task started** — anything with `confirmedAt` after this specific task's own
+  `generatedAt` (recovered from a small, machine-only `<!-- juntia:task-meta ... -->` comment the file already
+  carries), regardless of decision type. Flagged explicitly as something that may supersede a provisional
+  value already chosen or written — this is the exact case the Snake session found broken.
+- **Already known when this task started** — decisions confirmed before that point, filtered to this
+  workflow's own declared `decisionTypes` (the same relevance filter `## Potential decisions` already uses) so
+  this section stays bounded, never a full `DECISIONS.md` dump.
+
+No new decision status is persisted to make this work. Juntia never asserts a decision WAS applied to code —
+it cannot verify that without patching source itself, which it must not do. "New" is scoped to the task's own
+lifetime instead: a fresh `juntia route` call resets `generatedAt`, so a later, unrelated task never keeps
+re-flagging something an earlier task already had the chance to act on. See
+`phases/decision-continuity.md` for the full account, including why this was evaluated as the smallest
+sufficient mechanism rather than a persisted `pending → confirmed → applied` state machine.
+
 ## Where decisions live: `.juntia/decisions.json` vs. `DECISIONS.md`, evaluated
 
 | | `.juntia/decisions.json` | `.juntia/DECISIONS.md` |

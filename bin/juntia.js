@@ -23,7 +23,9 @@ const { validateProjectInterpretation } = require('../lib/runtime/project-interp
 const { validateDecisionRequest } = require('../lib/governance/decision-model.js');
 const { routeWorkflow } = require('../lib/governance/workflow-router.js');
 const { buildAgentContext } = require('../lib/governance/agent-context.js');
-const { TASK_HANDOFF_FILE, buildTaskHandoff, writeTaskHandoff } = require('../lib/governance/task-handoff.js');
+const {
+  TASK_HANDOFF_FILE, buildTaskHandoff, writeTaskHandoff, refreshTaskHandoffDecisions,
+} = require('../lib/governance/task-handoff.js');
 const { writeBootstrap } = require('../lib/governance/bootstrap.js');
 
 const PACKAGE_ROOT = path.join(__dirname, '..');
@@ -426,6 +428,17 @@ async function runConfirm(projectRoot = process.cwd(), { prompt = defaultPrompt 
   console.log('');
   console.log('Updated .juntia/context.md.');
 
+  // Decision Continuity phase: the real gap a live Snake dogfooding session
+  // found — context.md was already refreshed here, but the file an agent is
+  // actually mid-task against, .juntia/task-handoff.md, was not, so a
+  // decision that just contradicted a provisional value never reached it.
+  // No-ops (returns null) when no task handoff currently exists, or when
+  // the one on disk predates this mechanism — never an error either way.
+  const refreshedHandoff = refreshTaskHandoffDecisions(projectRoot, decisions);
+  if (refreshedHandoff) {
+    console.log('Updated .juntia/task-handoff.md — check its "Confirmed decisions" section before continuing implementation.');
+  }
+
   return { confirmed, rejected, stale };
 }
 
@@ -557,7 +570,8 @@ function runRoute(text, projectRoot = process.cwd(), { signals = [] } = {}) {
     return route;
   }
 
-  const markdown = buildTaskHandoff(text, route);
+  const { decisions } = loadDecisions(projectRoot);
+  const markdown = buildTaskHandoff(text, route, { decisions });
   writeTaskHandoff(projectRoot, markdown);
   writeBootstrap(projectRoot);
   console.log('');

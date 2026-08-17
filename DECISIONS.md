@@ -5,6 +5,24 @@ equivalent of `.juntia/DECISIONS.md`, which instead records decisions *within* a
 is gitignored, self-hosted instance data, not committed here). Append-only: a superseded decision is marked
 as such, never silently deleted.
 
+## A confirmed decision is a live instruction for unfinished work, never just history — but "applied" is never a status Juntia asserts
+
+**Decision:** `.juntia/task-handoff.md` — the file an agent actually works from mid-task — is now regenerated
+by `juntia confirm`, not just `.juntia/context.md`. It distinguishes a decision confirmed before the current
+task started (baseline) from one confirmed since (flagged as possibly superseding a provisional value already
+chosen). Deliberately rejected: adding a fourth, persisted `applied` status to a decision record, set by an
+agent or a command once it believes it has acted on it.
+
+**Why:** a real, live Snake dogfooding session found that two of four confirmed decisions never reached the
+game's code — `.juntia/context.md` was refreshed correctly, but nothing told the agent mid-task that a decision
+it needed had just changed. Juntia has no way to verify a code change actually implements a decision correctly
+without patching source itself, which contradicts "AI interprets. Juntia governs." — a self-reported `applied`
+flag would let a decision look resolved without being resolved. Scoping "new" to the current task's own
+lifetime (a fresh `juntia route` call resets the baseline) gives the same practical signal without Juntia ever
+claiming something about code it did not check.
+
+**Recorded:** `phases/decision-continuity.md`.
+
 ## Governance signals must be declared, never text-interpreted
 
 **Decision:** the dynamic governance level mechanism (`lib/governance/governance-signals.js`) never scans a

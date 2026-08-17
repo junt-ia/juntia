@@ -4,6 +4,28 @@ A lightweight log of completed phases — where things stand, checkpoint by chec
 doesn't require re-reading the full `CHANGELOG.md`/`phases/` history. Newest first. Each entry links to the
 real detail (a `phases/*.md` doc, or the matching `CHANGELOG.md` version) rather than duplicating it.
 
+## Decision Continuity — 2026-08-17
+
+Closes the real gap a first live-agent dogfooding session found (a three-arm Snake experiment: no Juntia,
+Juntia legacy, current Juntia Governance). The governed arm behaved differently under governance — discovered
+Juntia unprompted, ran `route`/`governance-review`, produced and confirmed four real decisions — at a real cost
+(~+40% tokens, ~+47% tool calls) and with no evidence yet of a code-quality improvement (11/11 functional
+checks in all three arms). Two of the four confirmed decisions never reached the game's code: `juntia confirm`
+refreshed `.juntia/context.md` correctly but never `.juntia/task-handoff.md`, the file the agent was actually
+mid-task against.
+
+- `juntia confirm` now refreshes `.juntia/task-handoff.md` too, whenever one currently exists — no new CLI
+  command, reuses the existing `route`/`confirm` cycle.
+- `.juntia/task-handoff.md` gains a `## Confirmed decisions` section distinguishing decisions confirmed before
+  the current task started from ones confirmed since (flagged — may supersede a provisional value already
+  chosen), filtered to the workflow's own declared decision types so it never becomes a full `DECISIONS.md`
+  dump.
+- No new persisted "applied" decision status — deliberately evaluated and rejected; see
+  `phases/decision-continuity.md` for why.
+
+Full account: [`phases/decision-continuity.md`](phases/decision-continuity.md). Test suite: 449 tests passing
+(427 before this phase, 22 new), zero failures.
+
 ## Governance Level Dynamic & Legacy Reasoning Cleanup — 2026-08-16
 
 Two objectives, both landed:

@@ -8,6 +8,34 @@ All notable changes to `@juntia/juntia` are documented here. Format loosely foll
 
 Nothing yet.
 
+## [0.12.0] - 2026-08-17
+
+### Decision Continuity
+
+Closes a real gap the first live dogfooding session (a three-arm Snake experiment) found: `juntia confirm`
+already refreshed `.juntia/context.md` on every confirmation, but never `.juntia/task-handoff.md` — the file
+an agent is actually mid-task against — so a human-confirmed decision that contradicted a provisional value
+an agent had already proposed did not reliably reach it. Two of four confirmed decisions never reached the
+game's code. Full account: [`phases/decision-continuity.md`](phases/decision-continuity.md).
+
+#### Added
+
+- `.juntia/task-handoff.md` gains a `## Confirmed decisions` section, split into decisions confirmed since the
+  current task started (flagged — may supersede a provisional value already chosen) and decisions already
+  known when it started (filtered to the workflow's own declared decision types). For a product/architecture
+  decision, the original question and options considered are shown alongside the human's actual confirmed
+  answer.
+- `juntia confirm` now refreshes `.juntia/task-handoff.md` (when one currently exists) immediately after
+  recording a decision, via a new `refreshTaskHandoffDecisions` (`lib/governance/task-handoff.js`) — no new CLI
+  command; reuses the existing `route`/`confirm` cycle.
+- `buildTaskHandoff(text, route, { decisions, generatedAt })` — two new, defensively-defaulted options; every
+  pre-existing caller is unaffected.
+
+#### Changed
+
+- `lib/governance/bootstrap.js` / `templates/governance/rules/agent-rules.md` — one short, generic instruction
+  each, pointing at the new section when a task handoff already exists.
+
 ## [0.11.0] - 2026-08-16
 
 Governance Level Dynamic & Legacy Reasoning Cleanup: governance level was a static per-workflow default; this

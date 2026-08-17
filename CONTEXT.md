@@ -32,9 +32,17 @@ engineering reasoning, an internal AI runtime bridge) was fully removed; see
 
 ## Status
 
-Public beta (`0.x`, currently `0.11.0` on npm — see `CHANGELOG.md` for exactly what shipped in each version).
-Real known limitations, named plainly in `README.md`: no live-agent session has been run end-to-end yet, only
-Claude Code is a built runtime integration, and the public API/CLI surface can still change.
+Public beta (`0.x`). `package.json` is at `0.12.0` (Decision Continuity); `0.11.0` remains the latest version
+actually published on npm until a GitHub Release is cut for `0.12.0` — see `docs/RELEASE.md` for why
+publishing needs that separate, deliberate step. See `CHANGELOG.md` for exactly what shipped in each version. A first real live-agent dogfooding session has now
+run (a three-arm Snake experiment: no Juntia, Juntia legacy, current Juntia Governance) — it confirmed the
+governed arm behaves differently (discovers Juntia, runs `route`/`governance-review`, produces and confirms
+real decisions) at a real cost (~+40% tokens, ~+47% tool calls), with no evidence yet that Juntia improves code
+quality (11/11 functional checks passed in all three arms), and found a real gap: a confirmed decision was not
+reliably reaching the agent that needed to act on it. `phases/decision-continuity.md` closes that specific gap.
+Real known limitations remain, named plainly in `README.md`: only Claude Code is a built runtime integration,
+the public API/CLI surface can still change, and this session has not yet been re-run to check whether the fix
+holds.
 
 ## Where things live
 
