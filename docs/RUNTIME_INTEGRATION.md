@@ -221,6 +221,14 @@ do with *this* request" (task type, workflow, governance level, suggested roles/
 copies — to `.juntia/governance/workflows/<workflow>.md`, the relevant role/skill files, and `context.md`/
 `DECISIONS.md`). Same "pointer, not a copy" discipline as every other generated file in this codebase.
 
+`task-handoff.md` is git-ignored by default (`.juntia/.gitignore`, Confirmation Channel Hardening phase) —
+same treatment as `facts.json`/`pending.json`, never `decisions.json`/`DECISIONS.md`'s. Every section of it is
+recomputed from `decisions.json`/`pending.json`/the Knowledge Layer/the route just resolved; even the one part
+that isn't re-derivable from another file — the original request text — is recovered by re-running `juntia
+route "<same request>"`, the same "just re-run the command" recovery `pending.json` already relies on. It is
+also inherently per-task, per-contributor, wholesale-overwritten by the next `route` call — committing it would
+mean noisy, purely-local-state diffs, never real project history the way `DECISIONS.md` is.
+
 **What this still doesn't do**, per the phase's own explicit restrictions: no role is automatically invoked, no
 skill is executed, no workflow runs anything — `route` only *names* the process; an external agent still reads
 `.juntia/governance/` and `task-handoff.md` and decides, reasons, and implements entirely on its own. At the

@@ -113,6 +113,34 @@ record) and a plain-English line appended to `.juntia/DECISIONS.md` (reusing the
 scaffolds and its existing "## Active decisions" bullet convention — not a second, competing narrative
 format). See "Where decisions live" below for why both exist, evaluated rather than assumed.
 
+### What `source: "human"` actually means (Confirmation Channel Hardening phase)
+
+Every decision `recordDecision()` writes carries `source: "human"`. Real dogfooding (restaurant-game, M04 v2)
+asked the honest question directly: does Juntia actually know a human answered? It does not, and cannot from
+inside a single CLI process — there is no keystroke telemetry, no session identity, no way to tell a real
+terminal apart from a script that opens one and types into it. An agent with shell access can run
+`juntia confirm` itself and answer its own escalated question; nothing in this process observes that.
+
+What `source: "human"` DOES mean, and is structurally true: this decision came from `runConfirm()` — the one
+code path in this codebase that can write `.juntia/decisions.json` — never from an internal AI code path, and
+never from the pending item's own proposed answer (`validateDecisionRequest` forbids a decision *request* from
+carrying its own answer; an *interpretation* is confirmed by a separate y/n prompt, never auto-accepted). In
+other words: **`source: "human"` names the CHANNEL a confirmation went through — Juntia's own defined
+human-confirmation mechanism — not a verified identity.** Juntia does not, and does not claim to, distinguish:
+
+- the **confirmation channel** (`juntia confirm`, the only mechanism that can produce a decision — this is
+  what `source: "human"` actually asserts);
+- the **identity of whoever typed the answer** (a real person at a keyboard, vs. an agent driving the same
+  CLI) — outside anything this process can observe, and therefore not something the field claims;
+- the **origin of the answer's content** (a human's own judgment, vs. a value an agent suggested and a human
+  merely accepted verbatim) — also outside what this field records.
+
+This is a deliberate, minimal distinction — not a new field or a new mechanism, since the existing guarantee
+(no AI code path writes decisions.json; an agent can never self-approve its own proposal) is still real and
+still enforced. It only corrects what the EXISTING field is honestly understood to promise. If your process
+needs the second or third distinction above enforced technically, that has to happen in the runtime/interface
+that presents the question to whoever answers it — Juntia governs the mechanism, not who sits at the keyboard.
+
 ## Decision types: interpretation, product, architecture (Phase 15F)
 
 The DECISION tier described above was originally shaped for exactly one kind of uncertainty: "what does the

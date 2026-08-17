@@ -46,9 +46,13 @@ When two sources disagree, the conflict is reported explicitly — never resolve
 | **Human Decision** | Product decisions, approving a detected pattern as a binding rule, resolving a source conflict | Never automated | **Built** (`juntia confirm`, Phase 12K) |
 
 Across every `.juntia/` file: **detecting and proposing content can be automated; writing it in as a
-recorded, human-authored fact never is.** `DECISIONS.md` entries are appended only by `juntia confirm`, only
-after a real human answers "yes" — never auto-generated, by definition; the AI Assisted tier can propose
-(`pending.json`) but never write to `decisions.json`/`DECISIONS.md` itself. The built Deterministic tier
+recorded decision never is.** `DECISIONS.md` entries are appended only by `juntia confirm`, only after a real
+answer to a real question through that mechanism — never auto-generated, by definition; the AI Assisted tier
+can propose (`pending.json`) but never write to `decisions.json`/`DECISIONS.md` itself, and can never supply
+its own answer to a decision request it proposed. What that mechanism can and can't verify about WHO answered
+is a separate, honestly-scoped question — see
+[`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md#what-source-human-actually-means-confirmation-channel-hardening-phase).
+The built Deterministic tier
 detects, prints, **and persists** (`.juntia/facts.json`, Phase 12I) — but that persisted file is
 machine-only memory, not one of the human-facing files above; see
 [`docs/CONTEXT_SYNTHESIS.md`](CONTEXT_SYNTHESIS.md) for exactly where the FACT/INTERPRETATION/DECISION

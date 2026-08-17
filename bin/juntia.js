@@ -281,19 +281,104 @@ async function runAnalyze(projectRoot = process.cwd(), { explain = false } = {})
   return markdown;
 }
 
-// Real, interactive confirmation of one pending interpretation at a time —
-// the only code path in this codebase that writes to `.juntia/decisions.json`,
-// and it only runs after a real human answers a real question. `prompt` is
-// injectable (defaults to a real `readline/promises` prompt over
-// stdin/stdout) so tests can drive it without touching a real terminal.
-async function defaultPrompt(question) {
-  const readline = require('readline/promises');
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    return await rl.question(question);
-  } finally {
-    rl.close();
+// Real confirmation of one pending interpretation at a time — the only code
+// path in this codebase that writes to `.juntia/decisions.json`. `prompt` is
+// injectable (defaults to createDefaultPromptSession()'s `.prompt`, below) so
+// tests can drive it without touching a real stdin at all.
+//
+// Hardening phase (real dogfooding, restaurant-game M04 v2): `juntia confirm`
+// worked when answered via `< file` redirection but hung silently over a
+// shell pipe (`printf "answer" | juntia confirm`). Traced to two real bugs in
+// the PREVIOUS per-question design (one fresh `readline.Interface` created
+// and closed for every single question):
+//
+//   1. `readline/promises`' `rl.question()` waits for a 'line' event, which
+//      Node's readline only emits for a terminated line. A pipe's last chunk
+//      commonly has no trailing newline (`printf "answer"` vs. `echo
+//      "answer"`, which appends one) — the stream ends, `question()` never
+//      resolves, and the process hangs forever with no error.
+//   2. Independently of (1): creating a SECOND `readline.Interface` on the
+//      same already-flowing, non-TTY stdin (for a second pending item)
+//      silently loses whatever the first interface had already buffered —
+//      the second question hangs too, even with a perfectly newline-
+//      terminated file. This reproduced with real `< file` redirection, not
+//      only a pipe, once more than one question was asked — the dogfooding
+//      report's "file redirection works" only ever exercised a single
+//      decision.
+//
+// Neither bug is specific to "pipe" vs. "file redirection": both are the
+// same non-TTY stream from Node's point of view, and Node cannot see which
+// shell syntax attached it. The fix reads every line available up front,
+// ONCE per confirm/setup session, on ONE persistent `readline.Interface` —
+// never a fresh one per question — then serves answers from that queue.
+// readline's own 'close' handling flushes a final, unterminated line as one
+// more 'line' event before firing, so a missing trailing newline is no
+// longer fatal either. Any question asked after the queue is exhausted
+// resolves to '' (the same "blank answer" `runConfirm` already treats as
+// "skip this one for now") rather than hanging — a confirm session must
+// never hang, even when asked more questions than the input actually
+// answered.
+//
+// A real interactive terminal (TTY) keeps the familiar live prompt via
+// `readline/promises`, on one shared interface for the whole session instead
+// of a fresh one per question — the same unification, for the same reason:
+// this is genuinely the only place input-reading differs by channel (a raw
+// terminal and a byte stream are different I/O models; Node has no single
+// API that speaks both), but every channel below funnels into the exact
+// same `(question) => Promise<answer>` contract, and every caller downstream
+// of that contract — validation, persistence, DECISIONS.md/context.md/
+// task-handoff.md refresh — is the same code, unconditionally, regardless of
+// where the answer came from.
+function createDefaultPromptSession(input = process.stdin, output = process.stdout) {
+  if (input.isTTY) {
+    const readline = require('readline/promises');
+    const rl = readline.createInterface({ input, output });
+    return { prompt: (question) => rl.question(question), close: () => rl.close() };
   }
+
+  const readline = require('readline');
+  const rl = readline.createInterface({ input, terminal: false });
+  const lines = [];
+  rl.on('line', (line) => lines.push(line));
+  const drained = new Promise((resolve) => { rl.once('close', resolve); });
+  let index = 0;
+  return {
+    prompt: async (question) => {
+      output.write(question);
+      await drained;
+      const answer = index < lines.length ? lines[index] : '';
+      index += 1;
+      return answer;
+    },
+    close: () => rl.close(),
+  };
+}
+
+// makeAsk(prompt) -> { ask, close }
+//
+// The one place `runConfirm`/`runSetup` decide whether they own a prompt
+// session or are borrowing one from a caller. A test-double `prompt`
+// (every existing test's own `scriptedPrompt`) is used directly, `close` is
+// a no-op — the test owns its own double's lifecycle, not this file. With no
+// `prompt` given, a `createDefaultPromptSession()` is created lazily, on the
+// FIRST real question — never merely because `runConfirm`/`runSetup` was
+// called — so a run with nothing to confirm and nothing to ask never
+// attaches to stdin at all, matching the previous design's own laziness.
+// `runSetup` passes its own `ask` down to `runConfirm` as that call's
+// `prompt` (see runSetup below) specifically so the two share ONE session
+// instead of each independently attaching to the same stdin — the exact
+// class of bug documented on createDefaultPromptSession() above, avoided by
+// construction rather than convention.
+function makeAsk(prompt) {
+  if (prompt) return { ask: prompt, close: () => {} };
+  let session = null;
+  return {
+    ask: (question) => {
+      if (!session) session = createDefaultPromptSession();
+      return session.prompt(question);
+    },
+    close: () => { if (session) session.close(); },
+  };
 }
 
 // listBlockingPendingDecisions(projectRoot) -> validated product/architecture
@@ -314,7 +399,7 @@ function listBlockingPendingDecisions(projectRoot) {
     .filter((item) => validateDecisionRequest(item).valid);
 }
 
-async function runConfirm(projectRoot = process.cwd(), { prompt = defaultPrompt } = {}) {
+async function runConfirm(projectRoot = process.cwd(), { prompt } = {}) {
   // normalizePendingItems (not plain loadPending): Phase 13D — pending.json
   // can now be written directly by an external AI agent (see
   // agent-handoff.js), so an item's `id` can no longer be assumed present or
@@ -338,108 +423,114 @@ async function runConfirm(projectRoot = process.cwd(), { prompt = defaultPrompt 
   const rejected = [];
   const stale = [];
 
-  for (const item of pending.items) {
-    // Phase 15F: a decision request (type "product"/"architecture") is a
-    // structurally different question — "what should this be," never "what
-    // does the evidence suggest is true" — and takes a completely separate
-    // path: no fact-grounding check applies (there is no fact to ground it
-    // in), and the human's own free-text answer, never anything the agent
-    // proposed, becomes the decision. This is the one place in this
-    // codebase that structurally guarantees "un agente nunca debe
-    // autoaprobar sus propias decisiones": `validateDecisionRequest` already
-    // rejected any proposal that tried to set its own answer, and the only
-    // way this loop ever calls `recordDecision` for one is with `answer`
-    // freshly typed by whoever is running `confirm` right now.
-    if (item.type === 'product' || item.type === 'architecture') {
-      // eslint-disable-next-line no-await-in-loop
-      const decisionValidation = validateDecisionRequest(item);
-      if (!decisionValidation.valid) {
+  const { ask, close } = makeAsk(prompt);
+
+  try {
+    for (const item of pending.items) {
+      // Phase 15F: a decision request (type "product"/"architecture") is a
+      // structurally different question — "what should this be," never "what
+      // does the evidence suggest is true" — and takes a completely separate
+      // path: no fact-grounding check applies (there is no fact to ground it
+      // in), and the human's own free-text answer, never anything the agent
+      // proposed, becomes the decision. This is the one place in this
+      // codebase that structurally guarantees "un agente nunca debe
+      // autoaprobar sus propias decisiones": `validateDecisionRequest` already
+      // rejected any proposal that tried to set its own answer, and the only
+      // way this loop ever calls `recordDecision` for one is with `answer`
+      // freshly typed by whoever is running `confirm` right now.
+      if (item.type === 'product' || item.type === 'architecture') {
+        // eslint-disable-next-line no-await-in-loop
+        const decisionValidation = validateDecisionRequest(item);
+        if (!decisionValidation.valid) {
+          console.log('');
+          console.log(`Skipping a pending decision request — invalid (${decisionValidation.errors.join('; ')}).`);
+          removePending(projectRoot, item.id);
+          stale.push(item.id);
+          continue;
+        }
+
         console.log('');
-        console.log(`Skipping a pending decision request — invalid (${decisionValidation.errors.join('; ')}).`);
+        console.log(`[${item.type} decision] ${item.question}`);
+        if (item.context) console.log(`  context: ${item.context}`);
+        if (Array.isArray(item.options) && item.options.length > 0) console.log(`  options: ${item.options.join(', ')}`);
+        // eslint-disable-next-line no-await-in-loop
+        const decisionAnswer = (await ask('Your decision (or "skip"/"reject"): ')).trim();
+        const normalizedAnswer = decisionAnswer.toLowerCase();
+
+        if (normalizedAnswer === '' || normalizedAnswer === 'skip') {
+          console.log('  Skipped for now — still pending, ask again later with `juntia confirm`.');
+          continue;
+        }
+        if (normalizedAnswer === 'reject') {
+          removePending(projectRoot, item.id);
+          rejected.push(item.id);
+          console.log('  Discarded — no decision recorded.');
+          continue;
+        }
+
+        const decision = recordDecision(projectRoot, item, decisionAnswer);
+        appendDecisionNarrative(projectRoot, decision);
+        removePending(projectRoot, item.id);
+        confirmed.push(decision.id);
+        console.log('  Recorded as a decision.');
+        continue;
+      }
+
+      // Every pending item is now untrusted input until proven otherwise — it
+      // may have come from Juntia's own (retired) internal path, or directly
+      // from an external AI agent following .juntia/agent-instructions.md, and
+      // this is the FIRST point anything checks its shape or its citations
+      // against the CURRENT facts (they can change between when an agent wrote
+      // its proposal and this later `confirm`). Malformed shape, a forbidden
+      // governance field, or a fact identifier that was never real — all fail
+      // the same way: dropped, never asked about, never a decision.
+      const validation = validateProjectInterpretation(item, facts);
+      if (!validation.valid) {
+        console.log('');
+        console.log(`Skipping a pending proposal — invalid (${validation.errors.join('; ')}).`);
+        console.log('If this came from an AI agent, ask it to re-read `.juntia/agent-instructions.md` and try again.');
         removePending(projectRoot, item.id);
         stale.push(item.id);
         continue;
       }
 
-      console.log('');
-      console.log(`[${item.type} decision] ${item.question}`);
-      if (item.context) console.log(`  context: ${item.context}`);
-      if (Array.isArray(item.options) && item.options.length > 0) console.log(`  options: ${item.options.join(', ')}`);
-      // eslint-disable-next-line no-await-in-loop
-      const decisionAnswer = (await prompt('Your decision (or "skip"/"reject"): ')).trim();
-      const normalizedAnswer = decisionAnswer.toLowerCase();
-
-      if (normalizedAnswer === '' || normalizedAnswer === 'skip') {
-        console.log('  Skipped for now — still pending, ask again later with `juntia confirm`.');
+      // A valid proposal that turns out to cite exactly the same facts as an
+      // already-confirmed decision is not asked about again — matching the
+      // guarantee this codebase has always given (see decisions-store.js's
+      // own dedup-by-basedOn design), now enforced here since Juntia no longer
+      // controls whether/when a proposal is written to pending.json.
+      const id = interpretationId(validation.result.basedOn);
+      const alreadyDecided = existingDecisions.find((d) => d.id === id);
+      if (alreadyDecided) {
+        console.log('');
+        console.log(`"${item.interpretation}" already matches a confirmed decision: "${alreadyDecided.text}" — nothing new to confirm.`);
+        removePending(projectRoot, item.id);
         continue;
       }
-      if (normalizedAnswer === 'reject') {
+
+      console.log('');
+      console.log(`"${item.interpretation}"`);
+      console.log(`  confidence: ${item.confidence}`);
+      console.log(`  based on: ${item.basedOn.join(', ')}`);
+      // eslint-disable-next-line no-await-in-loop
+      const answer = (await ask('Confirm this as a decision? [y/n] ')).trim().toLowerCase();
+
+      if (answer === 'y' || answer === 'yes') {
+        const decision = recordDecision(projectRoot, item);
+        appendDecisionNarrative(projectRoot, decision);
+        removePending(projectRoot, item.id);
+        confirmed.push(decision.id);
+        console.log('  Recorded as a decision.');
+      } else if (answer === 'n' || answer === 'no') {
         removePending(projectRoot, item.id);
         rejected.push(item.id);
-        console.log('  Discarded — no decision recorded.');
-        continue;
+        console.log('  Rejected — discarded.');
+      } else {
+        console.log('  Skipped for now — still pending, ask again later with `juntia confirm`.');
       }
-
-      const decision = recordDecision(projectRoot, item, decisionAnswer);
-      appendDecisionNarrative(projectRoot, decision);
-      removePending(projectRoot, item.id);
-      confirmed.push(decision.id);
-      console.log('  Recorded as a decision.');
-      continue;
     }
-
-    // Every pending item is now untrusted input until proven otherwise — it
-    // may have come from Juntia's own (retired) internal path, or directly
-    // from an external AI agent following .juntia/agent-instructions.md, and
-    // this is the FIRST point anything checks its shape or its citations
-    // against the CURRENT facts (they can change between when an agent wrote
-    // its proposal and this later `confirm`). Malformed shape, a forbidden
-    // governance field, or a fact identifier that was never real — all fail
-    // the same way: dropped, never asked about, never a decision.
-    const validation = validateProjectInterpretation(item, facts);
-    if (!validation.valid) {
-      console.log('');
-      console.log(`Skipping a pending proposal — invalid (${validation.errors.join('; ')}).`);
-      console.log('If this came from an AI agent, ask it to re-read `.juntia/agent-instructions.md` and try again.');
-      removePending(projectRoot, item.id);
-      stale.push(item.id);
-      continue;
-    }
-
-    // A valid proposal that turns out to cite exactly the same facts as an
-    // already-confirmed decision is not asked about again — matching the
-    // guarantee this codebase has always given (see decisions-store.js's
-    // own dedup-by-basedOn design), now enforced here since Juntia no longer
-    // controls whether/when a proposal is written to pending.json.
-    const id = interpretationId(validation.result.basedOn);
-    const alreadyDecided = existingDecisions.find((d) => d.id === id);
-    if (alreadyDecided) {
-      console.log('');
-      console.log(`"${item.interpretation}" already matches a confirmed decision: "${alreadyDecided.text}" — nothing new to confirm.`);
-      removePending(projectRoot, item.id);
-      continue;
-    }
-
-    console.log('');
-    console.log(`"${item.interpretation}"`);
-    console.log(`  confidence: ${item.confidence}`);
-    console.log(`  based on: ${item.basedOn.join(', ')}`);
-    // eslint-disable-next-line no-await-in-loop
-    const answer = (await prompt('Confirm this as a decision? [y/n] ')).trim().toLowerCase();
-
-    if (answer === 'y' || answer === 'yes') {
-      const decision = recordDecision(projectRoot, item);
-      appendDecisionNarrative(projectRoot, decision);
-      removePending(projectRoot, item.id);
-      confirmed.push(decision.id);
-      console.log('  Recorded as a decision.');
-    } else if (answer === 'n' || answer === 'no') {
-      removePending(projectRoot, item.id);
-      rejected.push(item.id);
-      console.log('  Rejected — discarded.');
-    } else {
-      console.log('  Skipped for now — still pending, ask again later with `juntia confirm`.');
-    }
+  } finally {
+    close();
   }
 
   const { decisions } = loadDecisions(projectRoot);
@@ -741,7 +832,16 @@ async function promptForAssistant(prompt) {
 // safe operations and reports their real, current state, never duplicating
 // a file, a decision, or a pending item. Phase 13D: no longer calls an AI
 // runtime itself — see phases/13d-ai-handoff-implementation.md.
-async function runSetup(projectRoot = process.cwd(), { prompt = defaultPrompt } = {}) {
+async function runSetup(projectRoot = process.cwd(), { prompt } = {}) {
+  const { ask, close } = makeAsk(prompt);
+  try {
+    return await runSetupSteps(projectRoot, ask);
+  } finally {
+    close();
+  }
+}
+
+async function runSetupSteps(projectRoot, ask) {
   console.log('Welcome to Juntia.');
   console.log('');
 
@@ -791,7 +891,7 @@ async function runSetup(projectRoot = process.cwd(), { prompt = defaultPrompt } 
   const { items: pendingBeforeConfirm } = normalizePendingItems(projectRoot);
   if (pendingBeforeConfirm.length > 0) {
     console.log(`${pendingBeforeConfirm.length} pending interpretation(s) from your AI assistant found — reviewing now.`);
-    await runConfirm(projectRoot, { prompt });
+    await runConfirm(projectRoot, { prompt: ask });
   }
 
   // 7: context — always refreshed from whatever facts/decisions exist now,
@@ -808,7 +908,7 @@ async function runSetup(projectRoot = process.cwd(), { prompt = defaultPrompt } 
   let provider = configuredProvider;
   let justSelectedProvider = false;
   if (!provider) {
-    provider = await promptForAssistant(prompt);
+    provider = await promptForAssistant(ask);
     console.log('');
     if (provider) {
       justSelectedProvider = true;

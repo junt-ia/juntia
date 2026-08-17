@@ -352,3 +352,34 @@ test('refreshTaskHandoffDecisions is idempotent — running it again with the sa
 
   assert.equal(first, second);
 });
+
+// --- Hardening phase: task-handoff.md's own git lifecycle ---
+//
+// Audited alongside the confirm-channel fix (same M04 v2 dogfooding
+// session): task-handoff.md is fully regenerable machine state — every
+// section is computed fresh from decisions.json/pending.json/the Knowledge
+// Layer/the route just resolved (see writeTaskHandoff's own header for the
+// full reasoning) — so it now follows the same default `.juntia/.gitignore`
+// treatment facts.json/pending.json already have, never DECISIONS.md/
+// decisions.json's "durable, never git-ignored" treatment.
+
+test('writeTaskHandoff git-ignores task-handoff.md by default, via the same scoped .juntia/.gitignore facts.json/pending.json already use', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'juntia-task-handoff-test-'));
+  writeTaskHandoff(root, buildTaskHandoff('Implementa clientes VIP.', REAL_ROUTE));
+
+  const gitignore = fs.readFileSync(path.join(root, '.juntia', '.gitignore'), 'utf8');
+  assert.match(gitignore, /task-handoff\.md/);
+});
+
+test('writeTaskHandoff never clobbers an already-customized .gitignore beyond adding the missing line', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'juntia-task-handoff-test-'));
+  fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.juntia', '.gitignore'), 'facts.json\nsomething-else\n');
+
+  writeTaskHandoff(root, buildTaskHandoff('Implementa clientes VIP.', REAL_ROUTE));
+
+  const gitignore = fs.readFileSync(path.join(root, '.juntia', '.gitignore'), 'utf8');
+  assert.match(gitignore, /facts\.json/);
+  assert.match(gitignore, /something-else/);
+  assert.match(gitignore, /task-handoff\.md/);
+});

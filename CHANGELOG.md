@@ -8,6 +8,50 @@ All notable changes to `@juntia/juntia` are documented here. Format loosely foll
 
 Nothing yet.
 
+## [0.15.0] - 2026-08-18
+
+### Confirmation Channel Hardening
+
+Hardens the human-confirmation mechanism after real dogfooding (restaurant-game, M04 v2) — no new governance
+capability, only correctness and honesty fixes to what already existed. Full account:
+[`phases/confirmation-channel-hardening.md`](phases/confirmation-channel-hardening.md).
+
+#### Fixed
+
+- `juntia confirm` failed silently (never hung visibly, never errored — the process just exited early) when
+  answered over a shell pipe, and — a deeper, previously-unreported bug — over `< file` redirection too, the
+  moment more than one pending item needed an answer in the same session. Root cause: a brand-new
+  `readline.Interface` was created for every single question, silently dropping whatever the previous one had
+  already buffered from the same non-TTY stdin; independently, `readline/promises`' `rl.question()` never
+  resolves for a final, unterminated line (`printf "answer"` vs. `echo "answer"`, which appends a newline).
+  Fixed by reading every line of non-interactive input once, up front, on one persistent `readline.Interface`
+  shared for the whole `confirm`/`setup` session (`bin/juntia.js`'s `createDefaultPromptSession`/`makeAsk`) —
+  interactive (TTY), piped, and file-redirected input now funnel into the exact same
+  `(question) => Promise<answer>` contract and the exact same downstream validation/persistence path.
+
+#### Changed
+
+- `.juntia/task-handoff.md` is now git-ignored by default (`.juntia/.gitignore`, same mechanism
+  `facts.json`/`pending.json` already use) — audited and reclassified as regenerable machine state, not
+  durable narrative like `decisions.json`/`DECISIONS.md`. See the phase doc for the full "regenerable vs.
+  permanent" analysis.
+- `source: "human"` on a recorded decision is now documented honestly: it names the confirmation CHANNEL
+  (`juntia confirm`, the only code path that can write `decisions.json`), not a verified human identity —
+  Juntia has no way to distinguish a real person typing from an agent driving the same CLI. The field itself
+  is unchanged (still `"human"`, still recorded unconditionally by `recordDecision`); only what it's
+  documented to promise changed. See `docs/CONTEXT_SYNTHESIS.md`'s new "What `source: "human"` actually
+  means" section, and the updated header comments in `lib/project-intelligence/decisions-store.js`.
+
+#### Added
+
+- `test/cli-confirm-io.test.js` — real child-process reproductions of both confirm-channel bugs (spawns the
+  actual `bin/juntia.js` binary over a real pipe and real file redirection; four of its seven tests fail
+  against the pre-fix code, confirmed directly before the fix was accepted).
+- `test/governance-flow-hardening.test.js` — end-to-end audit of the full `route -> pending ->
+  WAITING_HUMAN_CONFIRMATION -> confirm -> READY_TO_CONTINUE -> task-handoff` cycle after this phase's
+  changes, covering all eight of the phase's own named minimal cases.
+- `test/task-handoff.test.js` — coverage for the new `.gitignore` behavior.
+
 ## [0.14.0] - 2026-08-17
 
 ### Single Governance Source of Truth & Governance In-Flow
