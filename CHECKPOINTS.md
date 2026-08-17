@@ -4,6 +4,28 @@ A lightweight log of completed phases — where things stand, checkpoint by chec
 doesn't require re-reading the full `CHANGELOG.md`/`phases/` history. Newest first. Each entry links to the
 real detail (a `phases/*.md` doc, or the matching `CHANGELOG.md` version) rather than duplicating it.
 
+## Single Governance Source of Truth & Governance In-Flow — 2026-08-17
+
+Two objectives, resolved together:
+
+- **Single Governance Source of Truth.** `juntia update` is finally built (`docs/CLI.md` reserved it since
+  Phase 12M as "designed, not built") — migrates a project still carrying the pre-Phase-15B legacy governance
+  scheme (`.juntia/agent-rules.md`/`.juntia/workflows.md`/`.juntia/roles/*.md`) into `.juntia/governance/`,
+  the only tree any current code path already read or wrote. Copies content forward wherever safe (new
+  location missing, or still exactly Juntia's own default), reports a conflict — touching nothing — wherever
+  it has already diverged; never deletes or edits a legacy file. `CLAUDE.md` now states `.juntia/governance/`
+  is the single source of truth and points a legacy project at `update`.
+- **Governance In-Flow.** `.juntia/task-handoff.md` gains a `## Task Status` section
+  (`ACTIVE`/`WAITING_HUMAN_CONFIRMATION`/`READY_TO_CONTINUE`, `lib/governance/task-status.js`) — a real,
+  deterministic signal that a blocking decision must stop the affected work, without Juntia trying to control
+  an external runtime. An agent marks a task `WAITING_HUMAN_CONFIRMATION` by running `juntia confirm` right
+  after escalating (answering `skip` without a human answer yet) — reusing `confirm`'s own existing
+  unconditional `task-handoff.md` refresh, no new command. CLAUDE.md now also states the blocking-decision
+  contract directly, at the entry point.
+
+Full account: [`phases/single-governance-source-of-truth.md`](phases/single-governance-source-of-truth.md).
+Test suite: 505 tests passing (470 before this phase, 35 new), zero failures.
+
 ## Just-In-Time Governance — 2026-08-17
 
 Two consecutive fixes, both grounded in the same Phase 16B dogfooding session that motivated Decision

@@ -65,11 +65,12 @@ test('buildTaskHandoff embeds the real Agent Context as a fenced, parseable JSON
   assert.deepEqual(embedded, buildAgentContext(REAL_ROUTE));
 });
 
-test('the embedded Agent Context never contains a solution — only navigation (real names and paths)', () => {
+test('the embedded Agent Context never contains a solution — only navigation and computed state (real names, paths, and whether work is blocked) — Governance In-Flow phase adds taskStatus', () => {
   const markdown = buildTaskHandoff('Implementa clientes VIP.', REAL_ROUTE);
   const match = markdown.match(/```json\n([\s\S]*?)\n```/);
   const embedded = JSON.parse(match[1]);
-  assert.deepEqual(Object.keys(embedded).sort(), ['contextSources', 'roles', 'skills', 'task', 'workflow']);
+  assert.deepEqual(Object.keys(embedded).sort(), ['contextSources', 'roles', 'skills', 'task', 'taskStatus', 'workflow']);
+  assert.equal(embedded.taskStatus, 'ACTIVE', 'no pending decisions and nothing confirmed since this task started');
 });
 
 test('buildTaskHandoff returns null when no workflow was resolved — never a handoff pointing at an invented process', () => {
@@ -300,7 +301,7 @@ test('buildTaskHandoff embeds a machine-only task-meta comment carrying the requ
 
   const match = markdown.match(/```json\n([\s\S]*?)\n```/);
   const embedded = JSON.parse(match[1]);
-  assert.deepEqual(Object.keys(embedded).sort(), ['contextSources', 'roles', 'skills', 'task', 'workflow']);
+  assert.deepEqual(Object.keys(embedded).sort(), ['contextSources', 'roles', 'skills', 'task', 'taskStatus', 'workflow']);
 });
 
 // --- refreshTaskHandoffDecisions ---

@@ -196,7 +196,13 @@ test('a project with an old (pre-15D), Juntia-generated CLAUDE.md — the full g
     assert.equal(result.ok, true, 'a Juntia-generated file (marker present) must be safely regenerated, not refused');
     const claudeMd = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
     assert.match(claudeMd, /\.juntia\/BOOTSTRAP\.md/);
-    assert.doesNotMatch(claudeMd, /\.juntia\/governance\//, 'the old index content must not survive regeneration');
+    // The old (pre-15D) index enumerated governance/ subdirectories one bullet
+    // at a time (`.juntia/governance/roles/`, `.juntia/governance/workflows/`,
+    // ...) — that per-subdirectory enumeration must not survive regeneration.
+    // A single, bare mention of `.juntia/governance/` itself as "the source of
+    // truth" (Single Governance Source of Truth phase) is not that — never a
+    // second enumeration of specific files or subdirectories.
+    assert.doesNotMatch(claudeMd, /governance\/(roles|workflows|skills|rules)\//, 'the old index\'s per-subdirectory enumeration must not survive regeneration');
   })();
 });
 
@@ -248,5 +254,69 @@ test('context.md remains valid (parses/reads the same) after integrate runs', ()
 
     const after = fs.readFileSync(path.join(root, '.juntia', 'context.md'), 'utf8');
     assert.equal(before, after, 'integrate must never rewrite context.md — it only reads it');
+  })();
+});
+
+// --- Single Governance Source of Truth phase: CLAUDE.md's own contract ---
+
+test('CLAUDE.md states .juntia/governance/ is the single source of truth, without enumerating what is inside it', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+
+  return (async () => {
+    await silently(() => runAnalyze(root));
+    silently(() => runContext(root));
+    silently(() => runIntegrate('claude-code', root));
+
+    const claudeMd = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+    assert.match(claudeMd, /single source of truth/);
+    assert.match(claudeMd, /\.juntia\/governance\//);
+    assert.doesNotMatch(claudeMd, /governance\/(roles|workflows|skills|rules)\//);
+  })();
+});
+
+test('CLAUDE.md states the blocking-decision contract explicitly: no silent default, no continuing the affected work, escalate, wait, continue only after confirmation', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+
+  return (async () => {
+    await silently(() => runAnalyze(root));
+    silently(() => runContext(root));
+    silently(() => runIntegrate('claude-code', root));
+
+    const claudeMd = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+    assert.match(claudeMd, /do not silently pick a/i);
+    assert.match(claudeMd, /do not continue implementing the affected part/i);
+    assert.match(claudeMd, /decision request/i);
+    assert.match(claudeMd, /wait for a human to confirm/i);
+    assert.match(claudeMd, /continue only once/i);
+  })();
+});
+
+test('CLAUDE.md points a project still carrying a legacy governance scheme at `juntia update`, without itself trying to migrate anything', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+
+  return (async () => {
+    await silently(() => runAnalyze(root));
+    silently(() => runContext(root));
+    silently(() => runIntegrate('claude-code', root));
+
+    const claudeMd = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+    assert.match(claudeMd, /juntia update/);
+  })();
+});
+
+test('CLAUDE.md stays small — a minimal entry point, not a second index, even with the new contract paragraphs', () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+
+  return (async () => {
+    await silently(() => runAnalyze(root));
+    silently(() => runContext(root));
+    silently(() => runIntegrate('claude-code', root));
+
+    const claudeMd = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+    assert.ok(claudeMd.length < 2000, `CLAUDE.md should stay minimal, was ${claudeMd.length} bytes`);
   })();
 });

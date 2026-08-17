@@ -8,6 +8,46 @@ All notable changes to `@juntia/juntia` are documented here. Format loosely foll
 
 Nothing yet.
 
+## [0.14.0] - 2026-08-17
+
+### Single Governance Source of Truth & Governance In-Flow
+
+Two objectives, resolved together. Full account:
+[`phases/single-governance-source-of-truth.md`](phases/single-governance-source-of-truth.md).
+
+#### Added
+
+- `juntia update` — finally built (`docs/CLI.md` reserved it since Phase 12M as "designed, not built").
+  Migrates a project still carrying the pre-Phase-15B legacy governance scheme
+  (`.juntia/agent-rules.md`/`.juntia/workflows.md`/`.juntia/roles/*.md`) into the current single source of
+  truth (`.juntia/governance/`) — copies content forward wherever safe, reports a conflict instead of
+  guessing wherever the new location has already diverged, never deletes or edits a legacy file
+  (`lib/project-intelligence/governance-migration.js`).
+- `lib/governance/task-status.js` — `computeTaskStatus`, a pure function returning `ACTIVE` /
+  `WAITING_HUMAN_CONFIRMATION` / `READY_TO_CONTINUE`. `.juntia/task-handoff.md` gains a `## Task Status`
+  section (rendered first) and the embedded Agent Context JSON gains a `taskStatus` field. An agent marks a
+  task `WAITING_HUMAN_CONFIRMATION` by running `juntia confirm` right after escalating (answering `skip` if it
+  doesn't have the human's answer yet) — no new command; `runConfirm` already refreshed `task-handoff.md`
+  unconditionally on every run.
+- Decision requests gain an optional `reason` field (`decision-model.js`, `pending-store.js`,
+  `decisions-store.js`) — why a situation needs confirmation, transported and displayed verbatim in Task
+  Status, never required or interpreted.
+- `CLAUDE.md` states `.juntia/governance/` is the single source of truth (pointing a legacy project at
+  `juntia update`) and the blocking-decision contract directly, while staying under 2000 bytes.
+
+#### Fixed
+
+- `decision-model.js#validateDecisionRequest` treated an optional field explicitly set to `null` (exactly what
+  `pending-store.js#upsertDecisionRequest` writes for an omitted `context`/`options`/`evidence`) as invalid —
+  a latent bug this phase's own `reason` field addition surfaced. Now treats `null` the same as "absent" for
+  every optional field.
+
+#### Not added
+
+No new CLI command beyond `update` (already reserved). No fourth "applied" decision status. No per-workflow
+declarative migration of `.juntia/workflows.md` (reported as not automatically portable instead — real,
+distinct sections a flat file cannot reliably map onto without interpreting content).
+
 ## [0.13.0] - 2026-08-17
 
 ### Just-In-Time Governance

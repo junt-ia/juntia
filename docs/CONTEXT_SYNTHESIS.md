@@ -215,6 +215,34 @@ re-flagging something an earlier task already had the chance to act on. See
 `phases/decision-continuity.md` for the full account, including why this was evaluated as the smallest
 sufficient mechanism rather than a persisted `pending → confirmed → applied` state machine.
 
+## Task Status: a real signal a blocking decision must stop work, without Juntia stopping anything itself (Governance In-Flow phase)
+
+Decision Continuity closed how a confirmed decision reaches the active task; it left open how an agent — or a
+brand-new session with no memory of the conversation — discovers that a decision is *currently* blocking part
+of that task, before it's confirmed. `.juntia/task-handoff.md` gains a `## Task Status` section, computed by
+`lib/governance/task-status.js#computeTaskStatus` and embedded in both the human-readable prose and the
+machine-parseable Agent Context JSON block (a new `taskStatus` field):
+
+- **`WAITING_HUMAN_CONFIRMATION`** — at least one currently pending, valid product/architecture decision
+  request exists. Unconditional: Juntia never weighs pending items against each other, because anything
+  actually sitting in `pending.json` already passed the agent's own BLOCKING judgment (a non-blocking
+  situation is never escalated at all — see `decision-triggers.md`'s own `Requires confirmation` field). The
+  section lists each pending decision's question, affected area (`context`), the current task's own workflow,
+  and why it needs confirmation (`reason`, optional, agent-supplied, transported verbatim).
+- **`READY_TO_CONTINUE`** — nothing is currently pending, but a decision was confirmed since this task started
+  (the same "since" comparison `## Confirmed decisions` already makes) — something the task was waiting on
+  just got answered.
+- **`ACTIVE`** — neither of the above; the default, ordinary working state.
+
+No new persisted state: this is computed fresh every time, from `pending.json`'s current contents and
+`decisions.json`'s own `confirmedAt` timestamps — never a fourth decision status. The real mechanical trick
+that closes the loop without a new CLI command: an agent marks a task `WAITING_HUMAN_CONFIRMATION` the moment
+it escalates by running `juntia confirm` right away and answering `skip` (it doesn't have the human's real
+answer yet) — `runConfirm` already, unconditionally, refreshes `task-handoff.md` at the end of every run, so
+this "empty" confirm still recomputes and writes the current, real Task Status. Running `confirm` again, with
+the real answer once it arrives, clears it. See `phases/single-governance-source-of-truth.md` for the full
+account.
+
 ## Where decisions live: `.juntia/decisions.json` vs. `DECISIONS.md`, evaluated
 
 | | `.juntia/decisions.json` | `.juntia/DECISIONS.md` |

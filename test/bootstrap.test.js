@@ -50,7 +50,15 @@ test('buildBootstrap tells the agent a decision can surface at any point and nam
   const content = buildBootstrap(root);
   assert.match(content, /can surface at any point — not only before you start/);
   assert.match(content, /governance-review\/SKILL\.md/);
-  assert.match(content, /pause\s+only the specific piece of work/);
+  assert.match(content, /do not continue the affected piece of work/);
+});
+
+test('buildBootstrap names the Task Status mechanism — WAITING_HUMAN_CONFIRMATION, marked via `juntia confirm`, no new command — Governance In-Flow phase', () => {
+  const root = tempProject();
+  const content = buildBootstrap(root);
+  assert.match(content, /WAITING_HUMAN_CONFIRMATION/);
+  assert.match(content, /juntia confirm.* right away/);
+  assert.match(content, /answer `skip`/);
 });
 
 test('buildBootstrap names every real Knowledge Layer subdirectory without copying its content', () => {

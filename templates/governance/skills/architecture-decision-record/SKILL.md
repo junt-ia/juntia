@@ -12,7 +12,8 @@ process:
   - Confirm the tradeoff is real — two or more alternatives genuinely on the table, not one obvious choice dressed up as a decision.
   - Check .juntia/DECISIONS.md first — do not re-litigate an already-confirmed architectural decision.
   - Name each real alternative and its actual, concrete tradeoff — never an invented or generic pro/con.
-  - Write a decision request to `.juntia/pending.json` — see `.juntia/governance/rules/agent-rules.md` for the exact document contract — options being the real alternatives named above. Never fill in `text`/`decision`/`confirmedAt`/`source`.
+  - Write a decision request to `.juntia/pending.json` — see `.juntia/governance/rules/agent-rules.md` for the exact document contract — options being the real alternatives named above, and an optional `reason` naming why it's hard to reverse. Never fill in `text`/`decision`/`confirmedAt`/`source`.
+  - Run `juntia confirm` right away, answering `skip` if you don't have the human's answer yet — this marks `.juntia/task-handoff.md`'s Task Status as `WAITING_HUMAN_CONFIRMATION`, deterministically, without a new command.
   - Pause only the specific piece of work that depends on the answer — an unrelated part of the same task that doesn't need it can continue.
   - Once a human answers via `juntia confirm`, the recorded decision (`.juntia/DECISIONS.md`) is the real record, and `.juntia/task-handoff.md` is refreshed automatically with it — re-read its "Confirmed decisions" section and continue the paused work from there; treat it as settled, not as this skill's own recommendation restated.
 expected_output: A real decision request in `.juntia/pending.json` naming the actual alternatives, or — if no real second option actually exists — a clear statement that no decision is actually required.

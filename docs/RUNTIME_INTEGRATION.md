@@ -172,10 +172,15 @@ still override.
 are — nothing in this codebase deletes, moves, or rewrites them. Re-running `init`/`integrate`/`setup` on such
 a project scaffolds the new `.juntia/governance/` tree alongside the old files (never instead of them,
 because `init` only ever creates a file that doesn't already exist at its own path); `CLAUDE.md`'s regenerated
-index stops referencing the old paths, since the new ones are now the real source of truth. A developer who
-wants to fully retire the old files can review and remove them by hand; automating that removal was
-considered and rejected (see `phases/15b-knowledge-layer.md`) — deleting a file that might have been
-hand-edited without knowing so would be a real, avoidable data-loss risk.
+index stops referencing the old paths, since the new ones are now the real source of truth.
+
+`juntia update` (Single Governance Source of Truth phase) is the real, evidenced next step this paragraph
+originally left as "review and remove by hand": it copies old-scheme *content* forward into the new-scheme
+location — verbatim, never reworded — whenever doing so is safe (the new location doesn't exist yet, or is
+still exactly Juntia's own unedited default), and reports a conflict instead of guessing whenever the new
+location has already diverged. What's still true, unchanged: automating *deletion* of the old file remains
+rejected (see `phases/15b-knowledge-layer.md` for the original evaluation) — a file that might have been
+hand-edited is never removed without a human's own, separate decision to do so.
 
 ## The Workflow Routing Engine (Phase 15C) — connecting Core to the Knowledge Layer
 

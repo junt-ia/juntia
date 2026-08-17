@@ -19,6 +19,7 @@ const {
   integrateRuntime, RUNTIME_PROFILES, PLANNED_PROVIDERS, readRuntimeProvider, withRuntimeProvider,
 } = require('../lib/project-intelligence/agent-integration.js');
 const { HANDOFF_FILE, buildHandoffInstructions, writeHandoffInstructions } = require('../lib/project-intelligence/agent-handoff.js');
+const { detectLegacyGovernance, migrateGovernance } = require('../lib/project-intelligence/governance-migration.js');
 const { validateProjectInterpretation } = require('../lib/runtime/project-interpretation-validator.js');
 const { validateDecisionRequest } = require('../lib/governance/decision-model.js');
 const { routeWorkflow } = require('../lib/governance/workflow-router.js');
@@ -295,6 +296,24 @@ async function defaultPrompt(question) {
   }
 }
 
+// listBlockingPendingDecisions(projectRoot) -> validated product/architecture
+// pending items -> the exact set Governance In-Flow's `taskStatus` treats as
+// blocking. Read-only — normalizes ids/status/createdAt (same as `confirm`
+// itself) but never writes, removes, or prompts. Deliberately excludes
+// interpretation-type pending items: a pending FACT interpretation is a
+// different, lower-stakes mechanism (Phase 12J/13D) that never blocks
+// implementation the way an unanswered product/architecture decision does.
+// Deliberately excludes an invalid item (a malformed or self-answering
+// request) for the same reason `confirm` itself never asks about one — it
+// isn't a real, actionable question yet, so it must not tell an agent to
+// stop and wait on it.
+function listBlockingPendingDecisions(projectRoot) {
+  const { items } = normalizePendingItems(projectRoot);
+  return items
+    .filter((item) => item.type === 'product' || item.type === 'architecture')
+    .filter((item) => validateDecisionRequest(item).valid);
+}
+
 async function runConfirm(projectRoot = process.cwd(), { prompt = defaultPrompt } = {}) {
   // normalizePendingItems (not plain loadPending): Phase 13D — pending.json
   // can now be written directly by an external AI agent (see
@@ -434,9 +453,20 @@ async function runConfirm(projectRoot = process.cwd(), { prompt = defaultPrompt 
   // decision that just contradicted a provisional value never reached it.
   // No-ops (returns null) when no task handoff currently exists, or when
   // the one on disk predates this mechanism — never an error either way.
-  const refreshedHandoff = refreshTaskHandoffDecisions(projectRoot, decisions);
+  //
+  // Governance In-Flow phase: `blockingPending` is recomputed AFTER the loop
+  // above, so it reflects reality regardless of what just happened — an item
+  // just confirmed is gone (recordDecision + removePending already ran); one
+  // just skipped (the agent doesn't have a human answer yet) is still here,
+  // still blocking. This is also the real mechanism an agent uses to mark a
+  // task WAITING the moment it escalates: run `juntia confirm` right after
+  // writing the request, answer "skip" if the human hasn't answered yet —
+  // task-handoff.md still refreshes, now showing WAITING_HUMAN_CONFIRMATION,
+  // with no new command needed.
+  const blockingPending = listBlockingPendingDecisions(projectRoot);
+  const refreshedHandoff = refreshTaskHandoffDecisions(projectRoot, decisions, blockingPending);
   if (refreshedHandoff) {
-    console.log('Updated .juntia/task-handoff.md — check its "Confirmed decisions" section before continuing implementation.');
+    console.log('Updated .juntia/task-handoff.md — check its "Task Status"/"Confirmed decisions" sections before continuing implementation.');
   }
 
   return { confirmed, rejected, stale };
@@ -521,6 +551,74 @@ function runIntegrate(runtimeName, projectRoot = process.cwd(), { silent = false
   return result;
 }
 
+// --- Update / Governance Migration (Single Governance Source of Truth phase) -
+//
+// `juntia update` was designed in Phase 12L/12M and deliberately left unbuilt
+// (`docs/CLI.md#why-update-isnt-built-yet`): it needed a real, evidenced
+// conflict-resolution rule for a scaffolded file a developer may have since
+// edited, and none existed yet. Dogfooding since then found the first real
+// case: projects still carrying the pre-Phase-15B flat governance scheme
+// (`.juntia/agent-rules.md`, `.juntia/workflows.md`, `.juntia/roles/*.md`)
+// alongside — or instead of — the current Knowledge Layer
+// (`.juntia/governance/`). This is that command, scoped narrowly to that one
+// real migration (`lib/project-intelligence/governance-migration.js` owns
+// the actual conflict rule) — not a general "sync any template diff" engine,
+// which still has no more evidence justifying it than it did before.
+//
+// Deliberately reuses, never re-implements: `init()` (scaffold the current
+// governance/ tree first, unconditionally — same precedent `runIntegrate`/
+// `runRoute` already established), `runIntegrate`/`writeBootstrap` (refresh
+// the runtime pointer and BOOTSTRAP.md afterward — the same regeneration
+// every other command that touches `.juntia/` already triggers). Never
+// deletes or edits a legacy file — `migrateGovernance` itself only ever
+// writes to the new-scheme location.
+function runUpdate(projectRoot = process.cwd()) {
+  console.log('Checking for a legacy (.juntia/agent-rules.md, .juntia/workflows.md, .juntia/roles/) governance scheme...');
+  console.log('');
+
+  init(projectRoot);
+  const report = migrateGovernance(projectRoot);
+
+  if (!report.any) {
+    console.log('No legacy governance files found — nothing to migrate. .juntia/governance/ is already the only governance source.');
+  } else {
+    for (const m of report.migrated) {
+      console.log(`  Migrated ${m.from} -> ${m.to} (your original content preserved verbatim).`);
+    }
+    for (const m of report.alreadyMigrated) {
+      console.log(`  Already migrated: ${m.from} -> ${m.to} (unchanged since a previous \`juntia update\`).`);
+    }
+    for (const c of report.conflicts) {
+      console.log(`  Skipped ${c.from} -> ${c.to}: ${c.reason}`);
+    }
+    for (const n of report.notPortable) {
+      console.log(`  Found ${n.from}: ${n.reason}`);
+    }
+    console.log('');
+    console.log('Every legacy file above was left exactly as it was — nothing was deleted or edited. Once you have');
+    console.log('reviewed and copied over anything worth keeping, removing them is a normal, manual git operation.');
+  }
+
+  console.log('');
+  const configText = readConfigText(projectRoot);
+  const configuredProvider = configText ? readRuntimeProvider(configText) : null;
+  let integrateResult = null;
+  if (configuredProvider) {
+    integrateResult = runIntegrate(configuredProvider, projectRoot, { silent: true });
+    if (integrateResult.ok) {
+      console.log(`Refreshed ${integrateResult.file} and .juntia/BOOTSTRAP.md — both point only at .juntia/governance/.`);
+    } else {
+      writeBootstrap(projectRoot);
+      console.log(`Could not refresh ${RUNTIME_PROFILES[configuredProvider] ? RUNTIME_PROFILES[configuredProvider].label : configuredProvider}'s pointer (${integrateResult.reason}); refreshed .juntia/BOOTSTRAP.md.`);
+    }
+  } else {
+    writeBootstrap(projectRoot);
+    console.log('Refreshed .juntia/BOOTSTRAP.md — points only at .juntia/governance/. Run `juntia integrate <runtime>` once you know which AI assistant you use.');
+  }
+
+  return report;
+}
+
 // --- Workflow Routing Engine (Phase 15C) ------------------------------------
 //
 // `juntia route "<request>"` is the real entrypoint for this phase's own
@@ -559,7 +657,13 @@ function runRoute(text, projectRoot = process.cwd(), { signals = [] } = {}) {
 
   init(projectRoot);
   const route = routeWorkflow(text, projectRoot, { signals });
-  const agentContext = buildAgentContext(route);
+  // Governance In-Flow phase: a request is routed against the CURRENT real
+  // state, including anything already blocking — if a human still owes an
+  // answer from earlier, a brand-new request surfaces that too, rather than
+  // silently starting fresh as if nothing were outstanding.
+  const { decisions } = loadDecisions(projectRoot);
+  const blockingPending = listBlockingPendingDecisions(projectRoot);
+  const agentContext = buildAgentContext(route, { blockingPending, decisions });
   console.log(JSON.stringify(agentContext, null, 2));
 
   if (!route.workflow) {
@@ -570,8 +674,7 @@ function runRoute(text, projectRoot = process.cwd(), { signals = [] } = {}) {
     return route;
   }
 
-  const { decisions } = loadDecisions(projectRoot);
-  const markdown = buildTaskHandoff(text, route, { decisions });
+  const markdown = buildTaskHandoff(text, route, { decisions, blockingPending });
   writeTaskHandoff(projectRoot, markdown);
   writeBootstrap(projectRoot);
   console.log('');
@@ -758,6 +861,7 @@ module.exports = {
   runConfirm,
   runContext,
   runIntegrate,
+  runUpdate,
   runRoute,
   runSetup,
   formatAnalysis,
@@ -784,6 +888,7 @@ if (require.main === module) {
       .catch((err) => { console.error(`confirm failed: ${err.message}`); process.exit(1); });
   } else if (command === 'context') runContext(process.cwd());
   else if (command === 'integrate') runIntegrate(process.argv[3]);
+  else if (command === 'update') runUpdate(process.cwd());
   else if (command === 'route') {
     const rest = process.argv.slice(3);
     const signals = [];
@@ -799,7 +904,7 @@ if (require.main === module) {
     runRoute(textParts.join(' '), process.cwd(), { signals });
   } else if (command === '--version' || command === '-v') console.log(pkgVersion());
   else {
-    console.error('Usage: juntia <setup|init|analyze [--explain]|confirm|context|integrate <runtime>|route "<request>" [--signal <name>]...>');
+    console.error('Usage: juntia <setup|init|analyze [--explain]|confirm|context|integrate <runtime>|update|route "<request>" [--signal <name>]...>');
     console.error('New to Juntia? Run `juntia setup` — it walks through everything for you.');
     process.exit(1);
   }

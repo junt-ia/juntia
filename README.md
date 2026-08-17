@@ -54,8 +54,8 @@ Juntia helps you:
 
 ## Status
 
-**Public beta (0.x).** `@juntia/juntia@0.13.0` (Decision Continuity + Just-In-Time Governance) is the latest
-version published on npm. The current beta is a deterministic Knowledge Layer (rules,
+**Public beta (0.x).** `@juntia/juntia@0.14.0` (Single Governance Source of Truth + Governance In-Flow) is the
+latest version published on npm. The current beta is a deterministic Knowledge Layer (rules,
 workflows, roles, skills, decision triggers, governance signals), a Workflow Routing Engine connecting
 free-text requests to that layer with a dynamic governance level, a real Agent Consumption Model (`CLAUDE.md`
 → `.juntia/BOOTSTRAP.md` → `route` → `.juntia/task-handoff.md`) for Claude Code, and the full
@@ -76,6 +76,11 @@ surface can still change. See [`docs/RELEASE.md`](docs/RELEASE.md) for what vers
   being framed as a single pass "before implementing" rather than a standing, just-in-time capability (both
   closed in [`phases/just-in-time-governance.md`](phases/just-in-time-governance.md)). The session has not yet
   been re-run to check whether these fixes hold in practice.
+- That same dogfooding also found two generations of governance coexisting in a real project (a pre-Phase-15B
+  flat scheme alongside `.juntia/governance/`) with no way to move off the old one, and no deterministic signal
+  telling an agent a blocking decision was still unanswered across a session boundary — both closed in
+  [`phases/single-governance-source-of-truth.md`](phases/single-governance-source-of-truth.md) (`juntia update`,
+  Task Status). Neither has been validated in a real, live dogfooding session yet either.
 - Only Claude Code is a real, built integration; Codex/Gemini/Cursor are architecturally supported, not built.
 - No automatic role invocation or skill execution — Juntia names the process, an agent still has to read and
   follow it manually.
@@ -145,7 +150,7 @@ Open Claude Code — it will find CLAUDE.md and load Juntia's governance from th
 |---|---|
 | `juntia setup` | The recommended entrypoint. Creates the Knowledge Layer (`.juntia/governance/`) if it doesn't exist, analyzes the project, and integrates your AI agent — one command, coordinating everything below. |
 | `juntia analyze` | Analyzes the project and updates `.juntia/facts.json` — a deterministic inventory (languages, dependencies, structure), diffed against the previous run. |
-| `juntia update` | **Designed, not built yet.** Intended to sync a project's scaffolded Juntia files after an upgrade, without discarding a developer's own edits — see [`docs/CLI.md`](docs/CLI.md#why-update-isnt-built-yet) for why this isn't real yet. |
+| `juntia update` | Migrates a project still carrying the old, pre-Phase-15B governance scheme (`.juntia/agent-rules.md`, `.juntia/workflows.md`, `.juntia/roles/`) into the current single source of truth (`.juntia/governance/`) — never overwrites a file you've already customized at the new location, never deletes or edits the old one. See [`docs/CLI.md`](docs/CLI.md#why-update-was-scoped-narrowly) for why it's scoped to exactly this migration. |
 | `juntia route "<request>"` | Advanced command for inspecting the workflow Juntia would select for a given request — which intent, workflow, governance level, roles, and skills apply — useful for debugging the routing/handoff chain directly. Most of the time an AI agent runs this on its own, discovered via `CLAUDE.md`; a developer doesn't need to type it. |
 
 Juntia is designed to work *alongside* whichever AI coding runtime you already have open — it never replaces
@@ -162,6 +167,7 @@ npx juntia analyze --explain    # also refreshes .juntia/agent-instructions.md, 
 npx juntia confirm              # you review each pending interpretation — yes becomes a decision, no discards it
 npx juntia context              # (re)builds .juntia/context.md from confirmed facts + confirmed decisions
 npx juntia integrate claude-code  # generates CLAUDE.md so Claude Code finds everything above automatically
+npx juntia update                # migrates a legacy governance scheme (if any) into .juntia/governance/
 npx juntia route "<what you want to do>"  # classifies a request and resolves the workflow to follow
 ```
 
@@ -215,14 +221,26 @@ is refreshed automatically after each confirmation (Decision Continuity, extende
 exactly where it paused — the confirmed answer, distinctly flagged from what it already knew — without needing
 to remember the conversation or run any command it wasn't already running.
 
+A blocking decision needs a way to say so, deterministically, without Juntia trying to literally pause an
+external runtime it doesn't control (Governance In-Flow phase): `.juntia/task-handoff.md` carries a `Task
+Status` — `ACTIVE`, `WAITING_HUMAN_CONFIRMATION` (a real, unanswered decision request exists — the affected
+work must not continue), or `READY_TO_CONTINUE` (something that was blocking just got answered). The agent
+escalates and runs `juntia confirm` right away (answering `skip` if it doesn't have the human's answer yet) to
+mark status `WAITING_HUMAN_CONFIRMATION`; the same command, run again with the real answer, clears it. No
+fourth "applied" status exists — Juntia cannot verify a code change actually implements a decision without
+patching source itself, so it never claims to.
+
 Juntia's context is only useful if an agent actually reads it: `juntia integrate claude-code` generates
 `CLAUDE.md` at your project root — a minimal, real **entry point** (Phase 15D), never a full index: it says
-this project uses Juntia Governance and points Claude Code at `.juntia/BOOTSTRAP.md`, which is where the real
-navigation lives (`context.md`, `DECISIONS.md`, the Knowledge Layer, `agent-instructions.md`, and how to get
-the workflow/roles/skills for a *specific* request via `juntia route`, without reading everything up front). No
-copy of any of their content, no AI call, nothing sent anywhere, and it never overwrites a `CLAUDE.md` you
-already wrote yourself. Other runtimes (Codex, Gemini, Cursor) are architecturally supported but not built
-yet — no real evidence for their own conventions exists in this repo yet, so nothing was guessed at.
+this project uses Juntia Governance, that `.juntia/governance/` is the single source of truth (never an older
+`.juntia/agent-rules.md`/`workflows.md`/`roles/` a project might still be carrying — `juntia update` migrates
+those), states the blocking-decision contract directly, and points Claude Code at `.juntia/BOOTSTRAP.md`,
+which is where the real navigation lives (`context.md`, `DECISIONS.md`, the Knowledge Layer,
+`agent-instructions.md`, and how to get the workflow/roles/skills for a *specific* request via `juntia route`,
+without reading everything up front). No copy of any of their content, no AI call, nothing sent anywhere, and
+it never overwrites a `CLAUDE.md` you already wrote yourself. Other runtimes (Codex, Gemini, Cursor) are
+architecturally supported but not built yet — no real evidence for their own conventions exists in this repo
+yet, so nothing was guessed at.
 
 `juntia route "<request>"` (Phase 15C, extended Phase 15D) is the Workflow Routing Engine: it classifies a
 free-text request into one of `feature`/`bug`/`investigation`/`refactor` (or `unknown`, when there isn't
@@ -233,7 +251,7 @@ whichever AI agent you're working with. Juntia still never decides *how* to buil
 which process applies. `route` also refreshes `.juntia/BOOTSTRAP.md`, so it always reflects whether a task
 handoff currently exists.
 
-See [`docs/CLI.md`](docs/CLI.md) for the full public command surface (`update` still designed, not built) and
+See [`docs/CLI.md`](docs/CLI.md) for the full public command surface and
 [`docs/PROJECT_INTELLIGENCE.md`](docs/PROJECT_INTELLIGENCE.md) /
 [`docs/CONTEXT_SYNTHESIS.md`](docs/CONTEXT_SYNTHESIS.md) / [`docs/RUNTIME_INTEGRATION.md`](docs/RUNTIME_INTEGRATION.md)
 for the full model.

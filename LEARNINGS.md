@@ -3,6 +3,31 @@
 Real, evidenced lessons from building Juntia — kept so a later phase doesn't relearn them the hard way.
 Append-only, newest first within each entry's own topic.
 
+## A validator's "optional field" check needs to agree with what the trusted normalizer actually writes for "absent"
+
+`validateDecisionRequest` checked `parsed.context !== undefined` to mean "the field is present" — but
+`pending-store.js#upsertDecisionRequest`, the trusted function that actually builds a stored item, writes
+`context: request.context || null` for an omitted field: `null`, not `undefined`. The mismatch was latent for
+`context` because every existing test always supplied one; adding a new optional field (`reason`) with the
+exact same default pattern hit it immediately — every decision request omitting the new field failed
+validation with a confusing "reason, if present, must be a string," even though it wasn't present at all, only
+`null`. **Next time:** when a validator and a normalizer disagree about what "absent" looks like on the wire,
+the bug is invisible until a test finally omits the field — write that test, or check the normalizer's own
+default value directly, before trusting a validator's `!== undefined` check on a field a trusted writer might
+null-default.
+
+## A real conflict-resolution rule only becomes obvious once there's a real second copy to compare against
+
+`docs/CLI.md` left `juntia update` unbuilt for phases specifically because "no evidence yet dictates the right
+conflict-resolution rule" for a scaffolded file a developer might have edited. The rule that finally worked —
+compare the new location's current content to the stock template; identical means safe to overwrite, different
+means a real conflict — didn't require anything clever, but it did require a second, real thing to diff
+against (the actual template file on disk) that a purely `fs.existsSync` check (what `init()`'s own
+"never overwrite" rule already used) can't provide. Recognizing that content, not existence, was the real
+diffing key was the whole design. **Next time:** when a "does this need updating" question has stalled on "no
+right rule yet," check whether the real blocker is that no real second copy of the content exists yet to
+compare against — the rule can be almost mechanical once one does.
+
 ## A documented example that's missing the wrapper IS the contract, as far as an agent is concerned
 
 `agent-rules.md` showed a decision request as a single bare object — `{ "type": "product", ... }` — and never

@@ -187,7 +187,11 @@ test('integrate still works end to end; CLAUDE.md points at BOOTSTRAP.md, which 
   assert.equal(result.ok, true);
   const claudeMd = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
   assert.match(claudeMd, /\.juntia\/BOOTSTRAP\.md/);
-  assert.doesNotMatch(claudeMd, /\.juntia\/governance\//, 'CLAUDE.md itself must not enumerate governance/ anymore — that is BOOTSTRAP.md\'s job');
+  // CLAUDE.md may state, once, that `.juntia/governance/` is the source of
+  // truth (Single Governance Source of Truth phase) — it must never
+  // enumerate what's inside it (specific subdirectories or files); that
+  // stays BOOTSTRAP.md's job.
+  assert.doesNotMatch(claudeMd, /governance\/(roles|workflows|skills|rules)\//, 'CLAUDE.md must not enumerate governance/ subdirectories — that is BOOTSTRAP.md\'s job');
 
   const bootstrapMd = fs.readFileSync(path.join(root, '.juntia', 'BOOTSTRAP.md'), 'utf8');
   assert.match(bootstrapMd, /\.juntia\/governance\//);

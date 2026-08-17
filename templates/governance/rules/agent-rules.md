@@ -39,10 +39,12 @@ soften/extend one of the ones below, edit it here directly; Juntia will not sile
   object:
 
   ```json
-  { "type": "product", "question": "...", "context": "...", "options": ["...", "..."] }
+  { "type": "product", "question": "...", "context": "...", "options": ["...", "..."], "reason": "..." }
   ```
 
-  (`"type"` is `"product"` or `"architecture"`; `"context"`/`"options"` are optional.) The file itself holds
+  (`"type"` is `"product"` or `"architecture"`; `"context"`/`"options"`/`"reason"` are optional — `"reason"` is
+  why this specific situation needs confirmation, shown verbatim in `task-handoff.md`'s Task Status section.)
+  The file itself holds
   every pending item as a JSON **array** of these objects. Either of these is correct and accepted:
 
   ```json
@@ -69,6 +71,14 @@ soften/extend one of the ones below, edit it here directly; Juntia will not sile
   `.juntia/governance/rules/decision-triggers.md` names a few common, real situations and whether each is
   BLOCKING (`Requires confirmation: yes`) or not — that field decides blocking, never your own read of how
   important a question sounds. A situation it doesn't name is still your judgment call.
+- **Mark a blocking decision WAITING the moment you escalate it — right away, don't wait for the answer.**
+  After writing a decision request, run `juntia confirm` immediately, answering `skip` if you don't have the
+  human's real answer yet. This refreshes `.juntia/task-handoff.md`'s own "Task Status" section to
+  `WAITING_HUMAN_CONFIRMATION` and lists the pending decision — deterministic, file-backed, discoverable by
+  you or a later session without depending on this conversation. Do not silently pick a default and do not
+  continue the affected implementation while status reads `WAITING_HUMAN_CONFIRMATION`. Once a human answers
+  via `juntia confirm`, status returns to normal and the confirmed value appears in "Confirmed decisions" —
+  continue only from there.
 
 These rules describe what improves consistency and reduces contradictory or context-losing work across
 sessions — not a guarantee of correctness. A model can still make mistakes; the point is to reduce how often

@@ -30,8 +30,7 @@ Inside the "Juntia" box above, there are two layers a developer should think abo
 Juntia
   |
   ├── Public API            juntia setup | init | analyze [--explain] | confirm | context
-  |                         | integrate <runtime> | route "<request>" [--signal <name>]...
-  |                         | update (designed, not built)
+  |                         | integrate <runtime> | update | route "<request>" [--signal <name>]...
   |                         require('juntia') -- classifyTaskIntent, routeWorkflow
   |
   └── Internal engine       the Knowledge Layer resolver, the Intent Model, the

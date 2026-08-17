@@ -12,7 +12,8 @@ process:
   - Check .juntia/DECISIONS.md first — do not ask a question that already has a confirmed answer.
   - State the question in concrete, answerable terms — "what should X be," not "is this okay."
   - Name real options only if they're actually under consideration; an empty options list is more honest than invented ones.
-  - Write a decision request to `.juntia/pending.json` — see `.juntia/governance/rules/agent-rules.md` for the exact document contract. Never fill in `text`/`decision`/`confirmedAt`/`source` — those belong only to a human, at `juntia confirm` time.
+  - Write a decision request to `.juntia/pending.json` — see `.juntia/governance/rules/agent-rules.md` for the exact document contract, including an optional `reason` naming why this needs confirmation. Never fill in `text`/`decision`/`confirmedAt`/`source` — those belong only to a human, at `juntia confirm` time.
+  - Run `juntia confirm` right away, answering `skip` if you don't have the human's answer yet — this marks `.juntia/task-handoff.md`'s Task Status as `WAITING_HUMAN_CONFIRMATION`, deterministically, without a new command.
   - Pause only the specific piece of work that depends on the answer — an unrelated part of the same task that doesn't need it can continue.
   - Once a human answers via `juntia confirm`, `.juntia/task-handoff.md` is refreshed automatically with the confirmed value — re-read its "Confirmed decisions" section and continue the paused work from there, using the real answer, not the options you proposed.
 expected_output: A real decision request in `.juntia/pending.json`, or — if the unknown turns out to be a detail, not a decision — a clear statement of why it doesn't need escalating.

@@ -226,6 +226,13 @@ test('a decision already confirmed and re-queried later (e.g. re-running route f
   // Confirmed within the first task — shows as new.
   assert.match(confirmedSinceSection(taskHandoffText(root)), /grows each food/);
 
+  // A real task boundary always has real, measurable time between it and
+  // the confirmation that preceded it (see test/just-in-time-governance.test.js
+  // for the same, fuller explanation) — this only needs to be more than one
+  // millisecond so the two ISO timestamps compared below don't collide as an
+  // artifact of how fast synchronous test code runs.
+  await new Promise((resolve) => { setTimeout(resolve, 5); });
+
   // A new task starts (fresh `route` call) — the same decision is now
   // baseline context, not a surprise anymore.
   const secondRoute = silently(() => runRoute('Añade un modo de juego difícil a Snake.', root));

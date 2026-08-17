@@ -5,6 +5,37 @@ equivalent of `.juntia/DECISIONS.md`, which instead records decisions *within* a
 is gitignored, self-hosted instance data, not committed here). Append-only: a superseded decision is marked
 as such, never silently deleted.
 
+## A legacy governance file is migrated by copying content forward, never by deleting or auto-merging
+
+**Decision:** `juntia update` copies a legacy governance file's content into its new-scheme location verbatim
+when doing so is safe (the new location is missing or still exactly Juntia's own unedited default), and
+reports a conflict — touching nothing — the moment the new location has already diverged from that default.
+It never deletes the legacy file, never edits it, and never attempts to merge two independently-customized
+copies of the same content.
+
+**Why:** the project's own explicit constraint ("no eliminación destructiva... preservar contenido humano")
+rules out any migration that could lose a human edit at either location. A byte-identical-to-template check is
+the only reliable, mechanical way to know a new-scheme file is still safe to overwrite without asking Juntia to
+interpret or diff free text — the same "transport, never interpret" boundary every other decision in this
+document already holds to.
+
+**Recorded:** `phases/single-governance-source-of-truth.md`.
+
+## Task Status is computed, never persisted — no fourth decision status, no new state store
+
+**Decision:** whether a task is currently blocked (`ACTIVE` / `WAITING_HUMAN_CONFIRMATION` /
+`READY_TO_CONTINUE`) is computed fresh, every time, from `pending.json`'s current contents and
+`decisions.json`'s own `confirmedAt` timestamps (`lib/governance/task-status.js`). It is never written to
+`decisions.json` as a fourth status, and no separate task-state file or store was introduced.
+
+**Why:** the two real inputs already existed and were already the actual source of truth — a pending,
+unconfirmed, valid product/architecture decision request already means "blocking," by construction, since a
+non-blocking situation is never escalated to `pending.json` at all. Persisting a redundant, separately-tracked
+status would risk it drifting from the data it's supposed to summarize, for no real benefit; computing it on
+read guarantees it can never disagree with the state it describes.
+
+**Recorded:** `phases/single-governance-source-of-truth.md`.
+
 ## Decision escalation is just-in-time, invoked whenever a decision becomes concrete — never a single review pass
 
 **Decision:** `.juntia/governance/skills/governance-review/SKILL.md` (and the workflow/role files that point

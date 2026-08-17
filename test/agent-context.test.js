@@ -139,6 +139,50 @@ test('task.needsClarification and task.reason carry through — navigational met
   assert.equal(context.task.reason, 'No recognizable intent signal in the request text.');
 });
 
+// --- taskStatus (Governance In-Flow phase) ---
+
+test('taskStatus defaults to ACTIVE with no pending decisions and nothing confirmed since — backward compatible with every pre-existing, single-argument call', () => {
+  const context = buildAgentContext(RESOLVED_ROUTE);
+  assert.equal(context.taskStatus, 'ACTIVE');
+});
+
+test('taskStatus is WAITING_HUMAN_CONFIRMATION whenever a blocking decision request is currently pending — unconditionally, regardless of confirmed decisions', () => {
+  const context = buildAgentContext(RESOLVED_ROUTE, {
+    blockingPending: [{ type: 'product', question: 'How many points per event?' }],
+  });
+  assert.equal(context.taskStatus, 'WAITING_HUMAN_CONFIRMATION');
+});
+
+test('taskStatus is READY_TO_CONTINUE when nothing is currently pending but a decision was confirmed since this task started', () => {
+  const generatedAt = '2025-06-01T00:00:00.000Z';
+  const context = buildAgentContext(RESOLVED_ROUTE, {
+    blockingPending: [],
+    decisions: [{ confirmedAt: '2030-01-01T00:00:00.000Z' }],
+    generatedAt,
+  });
+  assert.equal(context.taskStatus, 'READY_TO_CONTINUE');
+});
+
+test('taskStatus is ACTIVE when a confirmed decision predates this task started, not READY_TO_CONTINUE for old news', () => {
+  const generatedAt = '2025-06-01T00:00:00.000Z';
+  const context = buildAgentContext(RESOLVED_ROUTE, {
+    blockingPending: [],
+    decisions: [{ confirmedAt: '2020-01-01T00:00:00.000Z' }],
+    generatedAt,
+  });
+  assert.equal(context.taskStatus, 'ACTIVE');
+});
+
+test('taskStatus favors WAITING_HUMAN_CONFIRMATION over READY_TO_CONTINUE when both a pending item and a freshly-confirmed decision exist', () => {
+  const generatedAt = '2025-06-01T00:00:00.000Z';
+  const context = buildAgentContext(RESOLVED_ROUTE, {
+    blockingPending: [{ type: 'architecture', question: 'Q2?' }],
+    decisions: [{ confirmedAt: '2030-01-01T00:00:00.000Z' }],
+    generatedAt,
+  });
+  assert.equal(context.taskStatus, 'WAITING_HUMAN_CONFIRMATION');
+});
+
 test('the object never contains prose describing what to build — every string value is either a real name or a real file path', () => {
   const context = buildAgentContext(RESOLVED_ROUTE);
   // No field here is free text proposing an implementation; roles/skills are
