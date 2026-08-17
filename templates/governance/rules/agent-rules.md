@@ -29,17 +29,46 @@ soften/extend one of the ones below, edit it here directly; Juntia will not sile
   `.juntia/agent-instructions.md` instead.
 - **Never invent a product or architecture decision on your own.** If a request leaves a real behavior
   parameter, threshold, or technical tradeoff unstated, and no existing decision in `.juntia/DECISIONS.md`
-  already covers it, write a decision request — `{ "type": "product"|"architecture", "question": "...",
-  "context": "...", "options": [...] }` — to `.juntia/pending.json`. Propose the question, never the answer;
-  continue only once a human has confirmed a real answer via `juntia confirm`. Not every unknown qualifies —
-  an ordinary implementation detail you can reasonably choose yourself is not a decision request; a
-  hard-to-reverse or genuinely undecided one is.
-- **Check for a real decision before implementing, not after.** Before writing code for a workflow that
-  declares any "Decisions this workflow may require" (see that workflow's own file, or `workflow.decisionAreas`
-  in your Agent Context / task handoff), review each named area against the request — see
-  `.juntia/governance/skills/governance-review/SKILL.md`. `.juntia/governance/rules/decision-triggers.md`
-  names a few common, real situations worth recognizing, but it never decides anything on its own — you judge
-  whether it actually applies.
+  already covers it, write a decision request to `.juntia/pending.json`. Propose the question, never the
+  answer; continue only once a human has confirmed a real answer via `juntia confirm`. Not every unknown
+  qualifies — an ordinary implementation detail you can reasonably choose yourself is not a decision request;
+  a hard-to-reverse or genuinely undecided one is.
+
+  **The full `.juntia/pending.json` contract** — this is the exact, complete shape Juntia validates; producing
+  anything else is what a real dogfooding session found silently broke `juntia confirm`. Each request is one
+  object:
+
+  ```json
+  { "type": "product", "question": "...", "context": "...", "options": ["...", "..."] }
+  ```
+
+  (`"type"` is `"product"` or `"architecture"`; `"context"`/`"options"` are optional.) The file itself holds
+  every pending item as a JSON **array** of these objects. Either of these is correct and accepted:
+
+  ```json
+  [{ "type": "product", "question": "..." }]
+  ```
+
+  ```json
+  { "schemaVersion": 1, "items": [{ "type": "product", "question": "..." }] }
+  ```
+
+  The second is the canonical shape Juntia itself writes back (and what you'll see if the file already
+  exists — add to its `items` array, don't replace it) — but the first, a bare array with no wrapper, is
+  read identically; use whichever is easier to produce. What is never valid: a single bare object with no
+  array around it at all, even for one request — it is `[{ ... }]`, not `{ ... }`. Never set `text`,
+  `decision`, `confirmedAt`, or `source` yourself — those belong only to a human, at `juntia confirm` time.
+- **Escalate a decision the moment you notice it needs one — not in a single review pass, and not after.** A
+  workflow's own "Decisions this workflow may require" section (or `workflow.decisionAreas` in your Agent
+  Context / task handoff) names areas that *can* apply, not a checklist to resolve all at once before you
+  start. The moment one genuinely becomes concrete — during product reasoning, architecture reasoning,
+  implementation, or QA — follow `.juntia/governance/skills/governance-review/SKILL.md` right then: write the
+  decision request, and pause only the specific piece of work that depends on the answer; an unrelated part of
+  the same task can continue. A real dogfooding session found that treating this as one pass, done early,
+  taught the opposite lesson — a decision that only became concrete mid-implementation was never re-checked.
+  `.juntia/governance/rules/decision-triggers.md` names a few common, real situations and whether each is
+  BLOCKING (`Requires confirmation: yes`) or not — that field decides blocking, never your own read of how
+  important a question sounds. A situation it doesn't name is still your judgment call.
 
 These rules describe what improves consistency and reduces contradictory or context-losing work across
 sessions — not a guarantee of correctness. A model can still make mistakes; the point is to reduce how often

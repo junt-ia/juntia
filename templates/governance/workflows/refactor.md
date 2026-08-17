@@ -23,6 +23,10 @@ stated change in what the system does.
 4. Validate — the existing test suite is the primary evidence a refactor stayed behavior-preserving; a
    refactor with no test coverage over the area it touches is a real, worth-naming risk, not a green light.
 
+If step 2 or 3 surfaces a real "Decisions this workflow may require" unknown below (most refactors never
+should) — escalate it via `governance-review` right then, and pause only the part of the restructuring that
+depends on the answer.
+
 ## Roles involved
 
 - **Engineer** — always: does the restructuring itself.
@@ -34,6 +38,8 @@ stated change in what the system does.
 - `implementation` — for the restructuring itself.
 - `testing-strategy` — specifically for regression coverage, since correctness here means "nothing changed,"
   not "something new works."
+- `governance-review` — only if a genuine "Decisions this workflow may require" unknown below surfaces; most
+  refactors never need it.
 
 ## Decisions this workflow may require
 

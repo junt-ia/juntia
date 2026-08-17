@@ -23,6 +23,11 @@ QA (reproduce) -> Engineer (fix) -> QA (validate)
 3. Modify.
 4. Validate — confirm the original reproduction no longer fails, and nothing else regressed.
 
+If, at step 2 or 3, what "correct" behavior actually means turns out to be genuinely undecided (see "Decisions
+this workflow may require" below) — escalate it via `governance-review` right then, and pause only the part
+of the fix that depends on the answer. This is rare for an ordinary bug fix; when it happens, it usually means
+step 2 uncovered more than a local logic error.
+
 ## Roles involved
 
 - **QA** — first and last: confirms the bug is real and reproducible before any change, and confirms the fix
@@ -35,6 +40,8 @@ QA (reproduce) -> Engineer (fix) -> QA (validate)
 
 - `implementation` — for the investigate/modify steps.
 - `testing-strategy` — for reproducing and validating.
+- `governance-review` — only if investigating the cause surfaces a genuine "Decisions this workflow may
+  require" unknown below; most bug fixes never need it.
 
 ## Decisions this workflow may require
 

@@ -53,7 +53,7 @@ test('matches the brief\'s own exact shape for a resolved route', () => {
     requiredReview: [],
     decisionTypes: ['product', 'architecture'],
     decisionAreas: { product: ['behavior', 'balancing'], architecture: ['data_model'] },
-    decisionGuidance: 'Review the potential decision areas below before implementing; escalate any that actually apply.',
+    decisionGuidance: 'Escalate a potential decision area the moment it becomes concrete — not a single review pass done once, before you start; most requests resolve most areas without needing to.',
   });
   assert.deepEqual(context.roles, ['product', 'architect', 'engineer', 'qa']);
   assert.deepEqual(context.skills, ['feature-planning', 'architecture-review', 'implementation', 'testing-strategy']);

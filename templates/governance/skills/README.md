@@ -28,7 +28,8 @@ frontmatter block followed by a short explanatory body:
 ---
 name: skill-name
 description: One sentence — what this skill is for.
-role: which role this skill is normally used from (product | architect | engineer | qa)
+role: which role this skill is normally used from (product | architect | engineer | qa) — or a short
+  cross-cutting description when a skill is genuinely usable from any role (see governance-review/SKILL.md)
 when_to_use: A short, concrete trigger condition.
 inputs:
   - what this skill needs to be given before it's useful
@@ -58,6 +59,9 @@ This directory starts with seven skills — enough to validate the model, not a 
   request, rather than guessing (Phase 15F).
 - `architecture-decision-record/` (Architect) — documenting a real technical tradeoff and escalating it as a
   decision request (Phase 15F).
-- `governance-review/` (Engineer) — checking a workflow's own declared decision areas, and what's already
-  pending or decided, immediately before implementing — not when an unknown happens to be noticed, but before
-  any of them get silently guessed into code (Phase 15G).
+- `governance-review/` (any role) — recognizing the moment a workflow-declared decision area becomes
+  concretely relevant, whatever step of the workflow you're in, checking whether it's already pending or
+  decided, and escalating it right then — not saved up for one pass before implementing starts, and not
+  discovered only once a value has already been silently guessed into code (Phase 15G; timing fixed in the
+  Just-In-Time Governance phase after a second real dogfooding session found the single-pass version
+  recreated the exact gap it was built to close).

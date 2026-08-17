@@ -22,6 +22,13 @@ write the implementation itself.
 
 - A blocking unknown from Product or Architecture reasoning hasn't been resolved.
 - The effort tier is high enough that unreviewed auto-proceeding would be inappropriate.
+- Implementation itself surfaces a real decision no earlier step named — a behavior parameter, a tunable
+  value, or a technical tradeoff that only became concrete once the code was actually being written.
+
+Escalate right then, via `.juntia/governance/skills/governance-review/SKILL.md` (which routes to
+`product-decision-making`/`architecture-decision-record` depending on type) — pause only the specific piece
+of work that depends on the answer, not the whole task. See `.juntia/governance/rules/decision-triggers.md`
+for whether a given situation is BLOCKING.
 
 ## Never
 

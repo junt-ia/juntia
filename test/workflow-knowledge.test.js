@@ -55,7 +55,7 @@ test('parses bug-fix.md into its real roles/skills/governance level (LIGHT by de
   const markdown = fs.readFileSync(path.join(TEMPLATES_WORKFLOWS, 'bug-fix.md'), 'utf8');
   const parsed = parseWorkflowMarkdown(markdown, 'bug-fix');
   assert.deepEqual(parsed.roles, ['qa', 'engineer', 'architect']);
-  assert.deepEqual(parsed.skills, ['implementation', 'testing-strategy']);
+  assert.deepEqual(parsed.skills, ['implementation', 'testing-strategy', 'governance-review']);
   assert.equal(parsed.governanceLevel, 'light');
 });
 
@@ -96,7 +96,7 @@ test('parses refactor.md into its real roles/skills/governance level (STANDARD b
   const markdown = fs.readFileSync(path.join(TEMPLATES_WORKFLOWS, 'refactor.md'), 'utf8');
   const parsed = parseWorkflowMarkdown(markdown, 'refactor');
   assert.deepEqual(parsed.roles, ['engineer', 'architect']);
-  assert.deepEqual(parsed.skills, ['implementation', 'testing-strategy']);
+  assert.deepEqual(parsed.skills, ['implementation', 'testing-strategy', 'governance-review']);
   assert.equal(parsed.governanceLevel, 'standard');
   assert.deepEqual(parsed.decisionTypes, ['architecture']);
   assert.deepEqual(parsed.decisionAreas, { architecture: ['module_boundary', 'data_model'] });

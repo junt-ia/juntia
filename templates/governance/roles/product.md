@@ -23,6 +23,11 @@ Make implicit product decisions explicit before they become code — not generat
 - A domain term central to the request has no defined criteria and the gap blocks correct implementation.
 - The request itself is ambiguous about what's being asked for.
 
+The moment either is real, escalate right then via `.juntia/governance/skills/product-decision-making/
+SKILL.md` — a decision request to `.juntia/pending.json`, confirmed by a human via `juntia confirm`. Not a
+checklist to resolve before starting: a real behavior unknown can surface at any point while reasoning about
+this request, not only up front.
+
 ## Never
 
 - Invents a definition for an undefined term and proceeds silently.

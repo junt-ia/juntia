@@ -8,6 +8,22 @@ real mechanism — a `type: "product"` or `type: "architecture"` pending item in
 `.juntia/governance/rules/agent-rules.md`. Juntia never matches a trigger against your request automatically;
 this file exists to be read, not executed.
 
+**`Requires confirmation` is this catalog's own definition of BLOCKING vs. non-blocking** — the only place
+that distinction is decided, never inferred by Juntia from a question's own wording or how important it
+sounds:
+
+- **`yes` — blocking.** Do not proceed on an assumption. Write the decision request, pause the specific piece
+  of work that depends on the answer, and wait for a real human confirmation via `juntia confirm` before
+  continuing it.
+- **`no` — non-blocking.** Use your own reasonable judgment and continue; nothing here requires you to stop
+  and wait. Note the choice in your own reasoning if it's worth recording, but it is not a decision request.
+
+A real, applicable situation this catalog doesn't name at all is still your judgment call, the same as always
+— this catalog names the common cases, it doesn't replace your own reasoning for one it doesn't cover. See
+`.juntia/governance/skills/governance-review/SKILL.md` for the full escalation procedure, invoked the moment a
+trigger like one of these becomes concretely relevant — at any point during a workflow, as many times as it
+genuinely happens, never saved up for a single review pass.
+
 Scaffolded once by `juntia init` and never overwritten after that — this file is yours to edit, extend, or
 trim once it exists. Kept deliberately short: a handful of real, evidenced situations, not a bureaucratic
 checklist for every possible unknown.

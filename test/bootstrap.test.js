@@ -45,6 +45,14 @@ test('buildBootstrap explains task-specific navigation via `juntia route`, never
   assert.doesNotMatch(content, /read (all|every) (of )?these files/i);
 });
 
+test('buildBootstrap tells the agent a decision can surface at any point and names the real just-in-time escalation path — Just-In-Time Governance phase', () => {
+  const root = tempProject();
+  const content = buildBootstrap(root);
+  assert.match(content, /can surface at any point — not only before you start/);
+  assert.match(content, /governance-review\/SKILL\.md/);
+  assert.match(content, /pause\s+only the specific piece of work/);
+});
+
 test('buildBootstrap names every real Knowledge Layer subdirectory without copying its content', () => {
   const root = tempProject();
   const content = buildBootstrap(root);

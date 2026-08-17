@@ -89,13 +89,20 @@ test('buildTaskHandoff lists the real, named decision areas per type, matching t
   assert.match(markdown, /Architecture:\n- data_model/);
 });
 
-test('buildTaskHandoff names the real decision-request mechanism and governance guidance', () => {
+test('buildTaskHandoff names the real decision-request mechanism and governance guidance, pointing at agent-rules.md for the exact document contract rather than duplicating a partial example', () => {
   const markdown = buildTaskHandoff('Implementa clientes VIP.', REAL_ROUTE);
-  assert.match(markdown, /Governance: STANDARD — Review the potential decision areas/);
+  assert.match(markdown, /Governance: STANDARD — Escalate a potential decision area the moment it becomes concrete/);
   assert.match(markdown, /\.juntia\/pending\.json/);
   assert.match(markdown, /juntia confirm/);
-  assert.match(markdown, /"type": "product"\|"architecture"/);
+  assert.match(markdown, /agent-rules\.md/);
   assert.match(markdown, /governance-review\/SKILL\.md/);
+});
+
+test('buildTaskHandoff frames potential decision areas as just-in-time, never a checklist to resolve before starting — the exact framing Phase 16B found broken', () => {
+  const markdown = buildTaskHandoff('Implementa clientes VIP.', REAL_ROUTE);
+  assert.match(markdown, /not a checklist to resolve before you/);
+  assert.match(markdown, /can happen more than once across the same task/);
+  assert.doesNotMatch(markdown, /before implementing/i);
 });
 
 test('a decision type with no named areas falls back to pointing at the workflow file\'s own section, never an empty list', () => {

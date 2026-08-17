@@ -261,6 +261,114 @@ test('normalizePendingItems backfills status/createdAt on a hand-written decisio
   assert.ok(items[0].createdAt);
 });
 
+// --- Just-In-Time Governance phase: pending.json contract tolerance ---------
+//
+// Real, reproduced bug (Phase 16B dogfooding): an external agent following
+// `.juntia/governance/rules/agent-rules.md`'s own (then-incomplete) example
+// wrote a bare JSON array of decision requests directly to pending.json —
+// `loadPending` rejected the whole document as "not a recognized pending
+// document," so `juntia confirm` never saw the request at all.
+
+test('loadPending accepts a bare JSON array as the items list — the exact shape an external agent can plausibly produce', () => {
+  const root = tempProject();
+  fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.juntia', 'pending.json'), JSON.stringify([
+    { type: 'product', question: 'How many points per food eaten?', context: 'scoring', options: ['1', 'grows each pickup'] },
+  ]));
+
+  const r = loadPending(root);
+  assert.equal(r.exists, true);
+  assert.equal(r.unknown, false);
+  assert.equal(r.items.length, 1);
+  assert.equal(r.items[0].question, 'How many points per food eaten?');
+});
+
+test('loadPending still accepts the canonical { schemaVersion, items } shape exactly as before — no regression', () => {
+  const root = tempProject();
+  fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.juntia', 'pending.json'), JSON.stringify({
+    schemaVersion: 1,
+    items: [{ type: 'product', question: 'Q?' }],
+  }));
+
+  const r = loadPending(root);
+  assert.equal(r.unknown, false);
+  assert.equal(r.items.length, 1);
+});
+
+test('loadPending still rejects a genuinely unrecognized document — tolerance for the array shape does not widen the net to anything else', () => {
+  const root = tempProject();
+  fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.juntia', 'pending.json'), JSON.stringify({ notItems: [] }));
+
+  const r = loadPending(root);
+  assert.equal(r.unknown, true);
+  assert.match(r.reason, /not a recognized pending document/);
+});
+
+test('loadPending still rejects a single bare object with no array around it at all — the one shape the fixed docs explicitly say is never valid', () => {
+  const root = tempProject();
+  fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.juntia', 'pending.json'), JSON.stringify({ type: 'product', question: 'Q?' }));
+
+  const r = loadPending(root);
+  assert.equal(r.unknown, true);
+});
+
+test('normalizePendingItems rewrites a bare-array pending.json back to the canonical { schemaVersion, items } shape on disk — self-healing, not a permanent second format', () => {
+  const root = tempProject();
+  fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.juntia', 'pending.json'), JSON.stringify([
+    { type: 'product', question: 'How many points per food eaten?' },
+  ]));
+
+  normalizePendingItems(root);
+
+  const onDisk = JSON.parse(fs.readFileSync(path.join(root, '.juntia', 'pending.json'), 'utf8'));
+  assert.equal(onDisk.schemaVersion, 1);
+  assert.ok(Array.isArray(onDisk.items));
+  assert.equal(onDisk.items.length, 1);
+});
+
+test('normalizePendingItems assigns real ids to a bare-array agent-written decision request, matching decisionRequestId', () => {
+  const root = tempProject();
+  fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.juntia', 'pending.json'), JSON.stringify([
+    { type: 'product', question: 'How many points per food eaten?', options: ['1', 'grows each pickup'] },
+  ]));
+
+  const { items } = normalizePendingItems(root);
+  assert.equal(items[0].id, decisionRequestId('How many points per food eaten?'));
+  assert.equal(items[0].status, 'pending');
+  assert.ok(items[0].createdAt);
+});
+
+test('a bare array with multiple decision requests is fully preserved — nothing lost by the tolerant read', () => {
+  const root = tempProject();
+  fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.juntia', 'pending.json'), JSON.stringify([
+    { type: 'product', question: 'Q1?' },
+    { type: 'architecture', question: 'Q2?' },
+  ]));
+
+  const { items } = normalizePendingItems(root);
+  assert.equal(items.length, 2);
+  assert.deepEqual(items.map((i) => i.question).sort(), ['Q1?', 'Q2?']);
+});
+
+test('savePending never writes the array shape — every write, including one triggered by a bare-array read, produces the canonical document', () => {
+  const root = tempProject();
+  fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.juntia', 'pending.json'), JSON.stringify([{ type: 'product', question: 'Q?' }]));
+
+  normalizePendingItems(root);
+  upsertDecisionRequest(root, PRODUCT_REQUEST);
+
+  const onDisk = JSON.parse(fs.readFileSync(path.join(root, '.juntia', 'pending.json'), 'utf8'));
+  assert.equal(onDisk.schemaVersion, 1);
+  assert.ok(Array.isArray(onDisk.items));
+});
+
 test('savePending never touches an already-customized .gitignore beyond adding the missing line', () => {
   const root = tempProject();
   fs.mkdirSync(path.join(root, '.juntia'), { recursive: true });

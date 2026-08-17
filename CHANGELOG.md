@@ -8,6 +8,48 @@ All notable changes to `@juntia/juntia` are documented here. Format loosely foll
 
 Nothing yet.
 
+## [0.13.0] - 2026-08-17
+
+### Just-In-Time Governance
+
+Two consecutive objectives, both grounded in a real Phase 16B dogfooding session. Full account:
+[`phases/just-in-time-governance.md`](phases/just-in-time-governance.md).
+
+#### Fixed
+
+- `lib/project-intelligence/pending-store.js#loadPending` now accepts a bare JSON array as `pending.json`'s
+  items list, not only the canonical `{ schemaVersion, items }` wrapper — the exact shape an external agent
+  following `.juntia/governance/rules/agent-rules.md`'s own (previously incomplete) example could plausibly
+  produce, and did, in the real dogfooding session that found this. `normalizePendingItems` self-heals the
+  array shape back to the canonical document on disk the moment it's next touched; nothing else about
+  accepted/rejected shapes changed.
+- `agent-rules.md` now documents the complete `pending.json` contract — the per-request object shape, both
+  accepted document shapes, and the one shape (a single bare object) that is still never valid.
+  `product-decision-making`/`architecture-decision-record` skills point at this single definition instead of
+  each repeating their own partial copy.
+
+#### Changed
+
+- `governance-review/SKILL.md` reframed from a single "immediately before implementation" checkpoint into a
+  standing, just-in-time capability — invoked the moment a decision area becomes concrete, at any workflow
+  step, as many times as genuinely needed. `feature-development.md`/`bug-fix.md`/`refactor.md` updated to
+  match; `governance-review` added to the latter two's own "Skills recommended," which previously named no
+  escalation skill despite declaring real decision areas.
+- `decision-triggers.md` now states explicitly that its own `Requires confirmation: yes/no` field is this
+  codebase's BLOCKING/non-blocking definition — declarative, never inferred from a question's own text.
+- `agent-rules.md`'s decision-escalation rule, the four role files
+  (`product.md`/`architect.md`/`engineer.md`/`qa.md`), `governance-levels.js`'s `decisionGuidance` strings, and
+  `task-handoff.js`'s generated "Potential decisions" prose all reworded to remove "before implementing"
+  single-pass framing in favor of the same just-in-time principle. `bootstrap.js` gains a "While you are
+  working" section stating it directly.
+
+#### Not added
+
+No new CLI command, no new decision status ("applied" evaluated and rejected again, same reasoning as
+Decision Continuity), no per-workflow "apply confirmed decisions" phase (evaluated, rejected as duplicating
+what Core's existing `task-handoff.md` refresh already provides uniformly), no automatic/inferred blocking
+classification.
+
 ## [0.12.0] - 2026-08-17
 
 ### Decision Continuity

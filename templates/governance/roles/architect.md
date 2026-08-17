@@ -23,6 +23,11 @@ complete design document for every request.
 - The request touches persistence, integration, security, or ownership — always, regardless of confidence.
 - No architecture facts are available to ground a recommendation (the correct response is naming the gap, not guessing).
 
+The moment a real, hard-to-reverse tradeoff is on the table, escalate right then via `.juntia/governance/
+skills/architecture-decision-record/SKILL.md` — a decision request to `.juntia/pending.json`, confirmed by a
+human via `juntia confirm`. This can surface during a dedicated review or later, once implementation itself
+reveals the real alternatives — either way, the moment it's concrete, not saved for a later pass.
+
 ## Never
 
 - Recommends a technology or component that wasn't actually supplied as a known fact about this project.

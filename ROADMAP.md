@@ -6,16 +6,19 @@ file names candidates and the evidence that would justify each, not commitments.
 
 ## Just landed
 
-Decision Continuity: `juntia confirm` now refreshes `.juntia/task-handoff.md`, not only `.juntia/context.md`,
-closing the real gap a first live Snake dogfooding session found (a confirmed decision that didn't reliably
-reach the agent mid-task). See `CHECKPOINTS.md` and `phases/decision-continuity.md`.
+Just-In-Time Governance: two consecutive fixes from the same Phase 16B dogfooding session — `pending.json`
+now accepts the bare-array shape an external agent's own documented contract could plausibly produce, and
+`governance-review` is a standing, just-in-time capability instead of a single pre-implementation checkpoint.
+See `CHECKPOINTS.md` and `phases/just-in-time-governance.md`. Builds directly on Decision Continuity (same
+session's other finding — `juntia confirm` refreshing `.juntia/task-handoff.md`, not only `.juntia/context.md`
+— `phases/decision-continuity.md`), unreleased alongside it.
 
-## What the first live-agent session found, unresolved by this phase
+## What the first live-agent session found, unresolved so far
 
-- **Re-run the Snake experiment.** This phase closed the mechanism the first session found broken, verified by
-  unit/integration tests reproducing the exact failure mode — it did not itself re-run the live session. Doing
-  that, and checking whether confirmed decisions now actually land in the game's code, is the single
-  highest-value next validation.
+- **Re-run the Snake experiment.** Both phases above closed mechanisms the first session found broken,
+  verified by unit/integration tests reproducing the exact failure modes — neither re-ran the live session
+  itself. Doing that, and checking whether confirmed decisions now actually land in the game's code via a
+  just-in-time escalation rather than a final pass, is the single highest-value next validation.
 - **No evidence yet that Juntia improves code quality.** All three arms of the Snake experiment (no Juntia,
   Juntia legacy, current Juntia Governance) passed 11/11 functional checks; the governed arm's real, measured
   cost was roughly +40% tokens and +47% tool calls. Juntia's demonstrated value so far is governance and
@@ -24,9 +27,16 @@ reach the agent mid-task). See `CHECKPOINTS.md` and `phases/decision-continuity.
   not built — no real evidence yet for any of their own conventions.
 - **`juntia update` is designed, not built** (`docs/CLI.md#why-update-isnt-built-yet`) — needs a real
   conflict-resolution rule for a scaffolded file a developer has since edited; no evidence yet dictates the
-  right one.
+  right one. Newly relevant: this phase's own Knowledge Layer edits (`agent-rules.md`, role/workflow files)
+  won't reach a project that already ran `juntia init` before this phase, for exactly this reason.
 - **No automatic role/skill invocation.** Juntia names the process; an agent still reads and follows it
-  manually. Whether that should change needs evidence from the live-agent session above, not a guess now.
+  manually — including the moment to escalate a decision, which this phase makes easier to notice but cannot
+  mechanically enforce. Whether that should change needs evidence from re-running the live-agent session
+  above, not a guess now.
+- **`juntia confirm <id>` for a single pending item, not the whole queue.** A real, named friction point this
+  phase found while verifying the just-in-time flow (multiple unrelated pending items get visited together in
+  one `confirm` run) — degrades safely today (an unanswered item stays pending, never mis-answered), left
+  unsolved pending real evidence it's a recurring problem, not a theoretical one.
 
 ## Candidates worth watching, not yet justified
 

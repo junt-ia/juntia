@@ -4,6 +4,30 @@ A lightweight log of completed phases — where things stand, checkpoint by chec
 doesn't require re-reading the full `CHANGELOG.md`/`phases/` history. Newest first. Each entry links to the
 real detail (a `phases/*.md` doc, or the matching `CHANGELOG.md` version) rather than duplicating it.
 
+## Just-In-Time Governance — 2026-08-17
+
+Two consecutive fixes, both grounded in the same Phase 16B dogfooding session that motivated Decision
+Continuity above:
+
+- **`pending.json` contract bug, fixed.** An external agent following `.juntia/governance/rules/
+  agent-rules.md`'s own (then-incomplete) example wrote a bare JSON array of decision requests directly to
+  `.juntia/pending.json`; `loadPending` rejected the whole document as unrecognized, so `juntia confirm` saw
+  nothing to confirm. `pending-store.js` now accepts the bare-array shape (self-healed back to the canonical
+  document on next write); `agent-rules.md` now documents the complete, unambiguous contract.
+- **Governance escalation is now just-in-time, not a single pass.** `governance-review` was reframed from
+  "immediately before implementation" (Phase 15G's own original design) into a standing capability invoked
+  the moment a decision area becomes concrete, at any workflow step, as many times as genuinely needed —
+  closing the real gap where two of four decisions in the dogfooding session reached the game's code as
+  silent guesses because the agent had already "done" governance-review earlier and had no cue to invoke it
+  again. `decision-triggers.md`'s own `Requires confirmation` field is now the codebase's explicit,
+  declarative BLOCKING/non-blocking definition. No new Core mechanism was required — the pause/confirm/resume
+  cycle Decision Continuity already built works at any point in a task, once the contract bug above stopped
+  silently breaking it.
+
+Full account: [`phases/just-in-time-governance.md`](phases/just-in-time-governance.md). Test suite: 470 tests
+passing (449 before this phase, 21 new — including an end-to-end reproduction of a decision surfacing
+mid-task, confirmed, and resumed without restarting the workflow), zero failures.
+
 ## Decision Continuity — 2026-08-17
 
 Closes the real gap a first live-agent dogfooding session found (a three-arm Snake experiment: no Juntia,

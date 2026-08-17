@@ -23,12 +23,16 @@ Product -> Architect (if needed) -> Engineer -> QA
 2. Review the existing architecture (`.juntia/context.md`, `.juntia/ARCHITECTURE.md` if present) before
    proposing a new one.
 3. Propose a solution, naming any tradeoff.
-4. Before implementing, check this workflow's own "Decisions this workflow may require" below against what
-   you're about to build — a real, applicable one gets escalated now, not discovered mid-implementation.
-5. If the proposal affects or conflicts with an existing confirmed decision, wait for confirmation before
-   implementing — do not proceed on an assumption.
-6. Implement.
-7. Validate — run the real tests/build, not just a visual read.
+4. Implement.
+5. Validate — run the real tests/build, not just a visual read.
+
+At any of the steps above — not only once, before step 4 starts — check this workflow's own "Decisions this
+workflow may require" below against the specific piece of work in front of you right now. The moment one
+genuinely applies, escalate it via `governance-review` and pause that specific piece of work; an unrelated
+part of the same task can continue. Do not try to predict every decision the whole feature will eventually
+need before you start — most only become concrete once you're actually doing the step that needs them. If the
+work affects or conflicts with an existing confirmed decision, wait for confirmation before proceeding on it —
+do not proceed on an assumption.
 
 ## Roles involved
 
@@ -43,7 +47,8 @@ Product -> Architect (if needed) -> Engineer -> QA
 
 - `feature-planning` — for the Product step.
 - `architecture-review` — only when the Architect role is engaged.
-- `governance-review` — for the Engineer, immediately before implementing (step 4 below).
+- `governance-review` — available at any step above, the moment a decision area becomes concretely relevant —
+  not a single pass reserved for the Engineer, and not limited to one point in the sequence.
 - `implementation` — for the Engineer step.
 - `testing-strategy` — for the QA step.
 

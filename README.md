@@ -54,8 +54,8 @@ Juntia helps you:
 
 ## Status
 
-**Public beta (0.x).** `@juntia/juntia@0.11.0` is the latest version published on npm; `0.12.0` (Decision
-Continuity) is on `main`, pending a release. The current beta is a deterministic Knowledge Layer (rules,
+**Public beta (0.x).** `@juntia/juntia@0.13.0` (Decision Continuity + Just-In-Time Governance) is the latest
+version published on npm. The current beta is a deterministic Knowledge Layer (rules,
 workflows, roles, skills, decision triggers, governance signals), a Workflow Routing Engine connecting
 free-text requests to that layer with a dynamic governance level, a real Agent Consumption Model (`CLAUDE.md`
 → `.juntia/BOOTSTRAP.md` → `route` → `.juntia/task-handoff.md`) for Claude Code, and the full
@@ -70,9 +70,12 @@ surface can still change. See [`docs/RELEASE.md`](docs/RELEASE.md) for what vers
 - A first live-agent session (a three-arm Snake dogfooding experiment) confirmed governance changes real agent
   behavior — but also that all three arms passed the same functional checks, so there is no evidence yet Juntia
   improves code quality, at a real, measured cost (~+40% tokens, ~+47% tool calls under governance). It also
-  found a real gap — a confirmed decision not reliably reaching the agent mid-task — closed in
-  [`phases/decision-continuity.md`](phases/decision-continuity.md); the session has not yet been re-run to
-  check whether that fix holds in practice.
+  found two real gaps: a confirmed decision not reliably reaching the agent mid-task (closed in
+  [`phases/decision-continuity.md`](phases/decision-continuity.md)); an external agent's own decision-request
+  writes to `.juntia/pending.json` being rejected when written as a bare JSON array, and `governance-review`
+  being framed as a single pass "before implementing" rather than a standing, just-in-time capability (both
+  closed in [`phases/just-in-time-governance.md`](phases/just-in-time-governance.md)). The session has not yet
+  been re-run to check whether these fixes hold in practice.
 - Only Claude Code is a real, built integration; Codex/Gemini/Cursor are architecturally supported, not built.
 - No automatic role invocation or skill execution — Juntia names the process, an agent still has to read and
   follow it manually.
@@ -192,14 +195,25 @@ has real ones, never a proposed answer — to the same `.juntia/pending.json`; `
 own real answer instead of a yes/no, and only that becomes the recorded decision. An agent can never pre-fill
 or self-approve its own decision — that's enforced structurally, not just by convention.
 
-Juntia also helps a decision surface *before* it gets silently guessed into code (Phase 15G): each workflow
-file can name specific decision areas it commonly touches (a feature's own file names `behavior`,
-`user_experience`, `scope`, `balancing` for product; `data_model`, `module_boundary`, `dependency_choice` for
-architecture) — real, named areas, not a generic checklist. `juntia route` surfaces these as "Potential
-decisions" in `.juntia/task-handoff.md`, and `.juntia/governance/rules/decision-triggers.md` names a few
-common, real situations worth recognizing (a new dependency, a tunable numeric value with no objectively
-correct answer, ...). None of this decides anything or blocks automatically — it's navigation an agent reads
-and applies its own judgment to, the same way every other Knowledge Layer file already works.
+Juntia also helps a decision surface before it gets silently guessed into code (Phase 15G): each workflow file
+can name specific decision areas it commonly touches (a feature's own file names `behavior`, `user_experience`,
+`scope`, `balancing` for product; `data_model`, `module_boundary`, `dependency_choice` for architecture) — real,
+named areas, not a generic checklist. `juntia route` surfaces these as "Potential decisions" in
+`.juntia/task-handoff.md`, and `.juntia/governance/rules/decision-triggers.md` names a few common, real
+situations worth recognizing (a new dependency, a tunable numeric value with no objectively correct answer,
+...), each declared BLOCKING or not. None of this decides anything or blocks automatically — it's navigation
+an agent reads and applies its own judgment to.
+
+These areas are named up front, but escalating one is **just-in-time, not a single pass** (Just-In-Time
+Governance phase): a second real dogfooding session found that treating this as one review done once, before
+implementation, taught agents to check only early and never again — exactly how a decision that only became
+concrete mid-implementation slipped through unconfirmed. The right moment to escalate is whenever a decision
+actually becomes concrete — during product reasoning, architecture reasoning, implementation, or QA — and the
+same mechanism (`.juntia/governance/skills/governance-review/SKILL.md` → a decision request in
+`.juntia/pending.json` → `juntia confirm`) can fire more than once across the same task. `.juntia/task-handoff.md`
+is refreshed automatically after each confirmation (Decision Continuity, extended here), so the agent picks up
+exactly where it paused — the confirmed answer, distinctly flagged from what it already knew — without needing
+to remember the conversation or run any command it wasn't already running.
 
 Juntia's context is only useful if an agent actually reads it: `juntia integrate claude-code` generates
 `CLAUDE.md` at your project root — a minimal, real **entry point** (Phase 15D), never a full index: it says

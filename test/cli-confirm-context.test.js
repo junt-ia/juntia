@@ -422,3 +422,92 @@ test('a decision request and a fact interpretation both pending at once are each
   assert.ok(decisions.some((d) => d.type === 'interpretation'));
   assert.ok(decisions.some((d) => d.type === 'product'));
 });
+
+// --- Just-In-Time Governance phase: the real Phase 16B dogfooding bug,
+// reproduced through the actual, wired `confirm` CLI ---------------------
+//
+// The exact scenario: an external agent, following
+// `.juntia/governance/rules/agent-rules.md`, writes a bare JSON array of
+// decision requests directly to `.juntia/pending.json` — never through
+// `upsertDecisionRequest` (which always produced the canonical
+// `{ schemaVersion, items }` shape; this bypasses it deliberately, the same
+// way a real external agent's own file write would). Before this phase,
+// `runConfirm` reported "pending.json could not be used (... not a
+// recognized pending document)" and confirmed nothing.
+
+test('an agent writing a bare JSON array of decision requests directly to pending.json is accepted by `juntia confirm`, end to end: pending -> decisions.json -> DECISIONS.md -> context.md', async () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', '{}');
+  await silently(() => runAnalyze(root));
+
+  // The agent's own raw file write — not upsertDecisionRequest.
+  writeFile(root, '.juntia/pending.json', JSON.stringify([
+    {
+      type: 'product',
+      question: 'How many points does eating one piece of food award?',
+      context: 'scoring',
+      options: ['1 point flat', 'points grow with each food eaten'],
+    },
+  ]));
+
+  const result = await silently(() => runConfirm(root, {
+    prompt: scriptedPrompt(['Points must grow with each food eaten, not stay fixed at 1.']),
+  }));
+
+  assert.equal(result.confirmed.length, 1);
+
+  const { decisions } = loadDecisions(root);
+  assert.equal(decisions.length, 1);
+  assert.equal(decisions[0].type, 'product');
+  assert.equal(decisions[0].text, 'Points must grow with each food eaten, not stay fixed at 1.');
+  assert.equal(decisions[0].source, 'human');
+
+  const narrative = fs.readFileSync(path.join(root, '.juntia', 'DECISIONS.md'), 'utf8');
+  assert.match(narrative, /Points must grow with each food eaten/);
+
+  const context = fs.readFileSync(path.join(root, '.juntia', 'context.md'), 'utf8');
+  assert.match(context, /Points must grow with each food eaten/);
+
+  assert.deepEqual(loadPending(root).items, []);
+});
+
+test('the canonical { schemaVersion, items } shape and the bare-array shape both reach `juntia confirm` identically — same outcome regardless of which one an agent produced', async () => {
+  const arrayRoot = tempProject();
+  writeFile(arrayRoot, 'package.json', '{}');
+  await silently(() => runAnalyze(arrayRoot));
+  writeFile(arrayRoot, '.juntia/pending.json', JSON.stringify([
+    { type: 'architecture', question: 'Where should reservation state live?', options: ['in memory', 'localStorage'] },
+  ]));
+  const arrayResult = await silently(() => runConfirm(arrayRoot, { prompt: scriptedPrompt(['localStorage']) }));
+
+  const wrappedRoot = tempProject();
+  writeFile(wrappedRoot, 'package.json', '{}');
+  await silently(() => runAnalyze(wrappedRoot));
+  writeFile(wrappedRoot, '.juntia/pending.json', JSON.stringify({
+    schemaVersion: 1,
+    items: [{ type: 'architecture', question: 'Where should reservation state live?', options: ['in memory', 'localStorage'] }],
+  }));
+  const wrappedResult = await silently(() => runConfirm(wrappedRoot, { prompt: scriptedPrompt(['localStorage']) }));
+
+  assert.equal(arrayResult.confirmed.length, 1);
+  assert.equal(wrappedResult.confirmed.length, 1);
+  assert.equal(loadDecisions(arrayRoot).decisions[0].text, loadDecisions(wrappedRoot).decisions[0].text);
+});
+
+test('a bare-array pending.json with a real fact interpretation (not only a decision request) is also accepted', async () => {
+  const root = tempProject();
+  writeFile(root, 'package.json', JSON.stringify({ dependencies: { phaser: '^3.0.0' } }));
+  await silently(() => runAnalyze(root));
+  writeFile(root, '.juntia/pending.json', JSON.stringify([
+    {
+      interpretation: 'This project appears to use Phaser as its main engine.',
+      confidence: 'medium',
+      basedOn: ['dependency:phaser'],
+      unknowns: [],
+    },
+  ]));
+
+  const result = await silently(() => runConfirm(root, { prompt: scriptedPrompt(['y']) }));
+  assert.equal(result.confirmed.length, 1);
+  assert.equal(loadDecisions(root).decisions[0].text, 'This project appears to use Phaser as its main engine.');
+});

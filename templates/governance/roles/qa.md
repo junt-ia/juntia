@@ -19,6 +19,12 @@ Make sure "done" is checked against what was actually asked for and decided — 
 ## Escalates to a human when
 
 - The acceptance criteria can't be checked mechanically and require a judgment call.
+- Validating the result surfaces that "correct" itself was never actually decided — not a QA judgment call,
+  but a real, unresolved product or architecture unknown.
+
+The first is a QA judgment, not a decision request. The second follows the same mechanism every other role
+uses — `.juntia/governance/skills/governance-review/SKILL.md`, escalated the moment it's noticed, not
+deferred past validation.
 
 ## Never
 

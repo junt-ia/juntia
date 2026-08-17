@@ -3,6 +3,31 @@
 Real, evidenced lessons from building Juntia — kept so a later phase doesn't relearn them the hard way.
 Append-only, newest first within each entry's own topic.
 
+## A documented example that's missing the wrapper IS the contract, as far as an agent is concerned
+
+`agent-rules.md` showed a decision request as a single bare object — `{ "type": "product", ... }` — and never
+once showed the actual document `pending.json` needs to be. It was technically true (that IS the shape of one
+request) and practically wrong (nothing told an agent what to do with more than one, or how to wrap it), and a
+real agent, needing to write more than one request, produced exactly the plausible-but-rejected shape: a bare
+JSON array. The fix wasn't just widening what Core accepts — the documentation itself had never stated the
+complete contract, only a fragment of it. **Next time:** when documentation shows an example of "one of," show
+the real container it lives inside too, at least once, completely — a technically-accurate fragment is not
+the same as a complete contract, and an agent will fill the gap with whatever's most plausible, not necessarily
+what Core actually validates.
+
+## A single-pass "before X" instruction teaches "check once," even when the mechanism it points to is reusable
+
+`governance-review`'s first version (Phase 15G) built a real, correct escalation mechanism and then told
+agents to invoke it at exactly one point: "immediately before implementation." The mechanism itself never
+stopped being usable more than once — but the instruction taught a stronger lesson than its own words:
+"do this, then move on," not "do this whenever it applies." A later dogfooding session found agents treating
+it as satisfied after one pass, silently guessing at decisions that only became concrete afterward — the exact
+failure the mechanism was built to prevent, reintroduced by how its own trigger condition was worded. Fixing it
+required no new mechanism, only rewording `when_to_use` from a fixed point in a sequence to a recurring
+condition, everywhere that sequence was described (workflow files, role files, generated prose). **Next time:**
+when writing a trigger condition for a reusable capability, check whether the wording itself implies "once" —
+timing language leaks into behavior at least as much as the mechanism's own correctness does.
+
 ## Regenerating the summary file is not the same as regenerating the file the agent is actually reading
 
 `juntia confirm` refreshed `.juntia/context.md` correctly from Phase 12K onward — that was never the bug. The

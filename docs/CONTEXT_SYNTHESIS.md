@@ -154,7 +154,9 @@ require`'s existing bullets gained indented sub-bullets — `feature-development
 lists `behavior`/`user_experience`/`scope`/`balancing`) — parsed into `workflow.decisionAreas` and surfaced as
 a "## Potential decisions" section in `.juntia/task-handoff.md`, alongside a governance-level-specific
 instruction (`workflow.decisionGuidance`, from `governance-levels.js`'s own registry: LIGHT needs no review by
-default, STANDARD should be reviewed before implementing, STRICT requires a real confirmed answer first).
+default, STANDARD/STRICT escalate the moment an area becomes concrete — not, as originally written here, in a
+single pass "before implementing"; see `phases/just-in-time-governance.md` for why that phrase itself turned
+out to be the problem a later dogfooding session found).
 
 A small, separate catalog, `.juntia/governance/rules/decision-triggers.md` (`lib/governance/
 decision-triggers.js` reads it), names a handful of common, real situations (a new dependency, a tunable
